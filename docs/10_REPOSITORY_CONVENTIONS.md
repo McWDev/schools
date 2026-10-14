@@ -5,12 +5,12 @@
 - Next.js 16 App Router, React 19, TypeScript strict mode, Tailwind CSS 4.
 - ESLint (`eslint-config-next` + `eslint-config-prettier`), zero warnings allowed.
 - Prettier with the Tailwind class-sorting plugin.
-- Vitest for unit and integration tests. Playwright will be added with the first end-to-end workflow (Task 002).
+- Vitest for unit and integration tests; Playwright (Chromium) for end-to-end tests in `tests/e2e/`.
 - Zod for server-side validation, including environment variables (`src/lib/env-schema.ts`).
 
 ## Planned choices (confirmed in their tasks)
 - Database access: **Drizzle ORM** with the `pg` driver (confirmed in Task 001; see `11_TENANCY_IMPLEMENTATION.md`). Migrations via `drizzle-kit`, committed under `drizzle/`.
-- Authentication: selected and documented in Task 002.
+- Authentication: in-house sessions on argon2id + hashed tokens (confirmed in Task 002; see `12_AUTHENTICATION.md`).
 
 ## Source layout
 ```
@@ -29,7 +29,7 @@ docs/                  Product and engineering documentation (Markdown only)
 
 Rules:
 - Every file under `src/server/`, plus `src/lib/env.ts`, imports `server-only`, so it cannot be bundled for the browser. Exception: `src/server/db/schema.ts` (table definitions only, loaded directly by drizzle-kit).
-- `scripts/` holds owner-level tooling (migrations, seeding, role setup). Application code never imports it.
+- `scripts/` holds owner-level tooling (migrations, seeding, role setup). Application code never imports it. Scripts run with `tsx --conditions=react-server` so they may reuse `server-only` modules.
 - Domain logic lives in `src/server/modules`, not in UI components or route files.
 - Unit tests sit next to the file they test (`*.test.ts`); cross-module and database tests go in `tests/`.
 

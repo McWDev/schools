@@ -46,12 +46,16 @@ Connection strings are server-only and stored in `.env.local` / `.env.test.local
 | `npm run db:migrate`                 | Apply migrations (`MIGRATION_DATABASE_URL`, owner role) |
 | `npm run db:rotate-runtime-password` | Set the `app_runtime` password; prints `DATABASE_URL`   |
 | `npm run db:seed`                    | Insert synthetic School A / School B (development only) |
-| `npm run test:integration`           | Tenant-isolation tests against `TEST_DATABASE_URL`      |
+| `npm run test:integration`           | Tenancy and auth tests against `TEST_DATABASE_URL`      |
+| `npm run test:e2e`                   | Browser tests (Playwright); run `npm run build` first   |
+| `npm run auth:bootstrap-admin`       | Create the first platform admin (one-time setup link)   |
 
-Tenant isolation design: [`docs/11_TENANCY_IMPLEMENTATION.md`](docs/11_TENANCY_IMPLEMENTATION.md).
+Design records: [tenant isolation](docs/11_TENANCY_IMPLEMENTATION.md), [authentication](docs/12_AUTHENTICATION.md).
+
+Local sign-in on the `development` branch: the synthetic accounts (`admin.a@example.test`, `teacher.a1@example.test`, `admin.b@example.test`, `multi@example.test`) use the development-only password set by `npm run db:seed` (see `scripts/lib/synthetic-tenants.ts`). Password-reset emails are written to `.outbox/` instead of being sent.
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push to `main` and `task/**` branches and on every pull request: install, lint, format check, typecheck, unit tests, integration tests (Postgres 18 service, migrations from scratch), build, client-bundle secret scan, and production dependency audit. A change merges only when CI is green.
+`.github/workflows/ci.yml` runs on every push to `main` and `task/**` branches and on every pull request: install, lint, format check, typecheck, unit tests, integration tests (Postgres 18 service, migrations from scratch), build, client-bundle secret scan, Playwright end-to-end tests, and production dependency audit. A change merges only when CI is green.
 
 See [`docs/10_REPOSITORY_CONVENTIONS.md`](docs/10_REPOSITORY_CONVENTIONS.md) for folder layout and workflow rules.

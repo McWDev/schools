@@ -4,8 +4,8 @@
 | ---- | ----------------------------------------- | --------------------- | -------------------------------- |
 | 000  | Repository, tooling, environment baseline | Accepted              | [TASK_000](evidence/TASK_000.md) |
 | 001  | SaaS tenancy foundation and isolation     | Accepted              | [TASK_001](evidence/TASK_001.md) |
-| 002  | Authentication, login, sessions           | Next                  |                                  |
-| 003  | User management, roles, profile           | Not started           |                                  |
+| 002  | Authentication, login, sessions           | Done, awaiting review | [TASK_002](evidence/TASK_002.md) |
+| 003  | User management, roles, profile           | Next                  |                                  |
 | 004  | Professional dashboard                    | Not started           |                                  |
 | 005  | School onboarding and plans               | Not started           |                                  |
 | 006  | Branch management                         | Not started           |                                  |

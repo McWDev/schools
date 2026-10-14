@@ -15,6 +15,20 @@
       "when": 1791999676434,
       "tag": "0001_rls_and_runtime_role",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792002403545,
+      "tag": "0002_auth_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792002407813,
+      "tag": "0003_auth_grants",
+      "breakpoints": true
     }
   ]
 }

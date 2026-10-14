@@ -6,6 +6,7 @@ import {
   check,
   foreignKey,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -67,7 +68,7 @@ export const branches = pgTable(
   ],
 );
 
-/** Global login identity. Credentials and sessions are added in Task 002. */
+/** Global login identity. A user may belong to several schools through memberships. */
 export const users = pgTable(
   "users",
   {
@@ -76,6 +77,9 @@ export const users = pgTable(
     displayName: text("display_name").notNull(),
     status: userStatus("status").notNull().default("invited"),
     isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
+    /** argon2id hash; null until the user sets a password via invitation or reset link. */
+    passwordHash: text("password_hash"),
+    passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
@@ -157,3 +161,55 @@ export const auditEvents = pgTable(
     index("audit_events_school_id_occurred_at_idx").on(t.schoolId, t.occurredAt),
   ],
 );
+
+/**
+ * Server-side sessions. The cookie holds a random token; only its SHA-256 hash is stored, so a
+ * database leak does not expose usable sessions. Revocation takes effect on the next request.
+ */
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tokenHash: text("token_hash").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** School selected by the user; always re-validated against active membership on use. */
+    activeSchoolId: uuid("active_school_id").references(() => schools.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    userAgent: text("user_agent"),
+  },
+  (t) => [
+    unique("sessions_token_hash_key").on(t.tokenHash),
+    index("sessions_user_id_idx").on(t.userId),
+  ],
+);
+
+/** Single-use password reset / account setup tokens, stored hashed. */
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tokenHash: text("token_hash").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("password_reset_tokens_token_hash_key").on(t.tokenHash),
+    index("password_reset_tokens_user_id_idx").on(t.userId),
+  ],
+);
+
+/** Fixed-window counters for rate limiting; shared by all app instances. */
+export const authRateLimits = pgTable("auth_rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull(),
+  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+});

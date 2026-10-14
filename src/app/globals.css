@@ -1,26 +1,69 @@
 @import "tailwindcss";
 
+/* Design tokens: calm neutral surfaces, one restrained accent, semantic status colors. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --surface-muted: #f1f3f6;
+  --border: #dde1e7;
+  --foreground: #16181d;
+  --muted: #5b6372;
+  --primary: #2f5bd3;
+  --primary-hover: #2449b0;
+  --primary-foreground: #ffffff;
+  --danger: #b42318;
+  --danger-surface: #fef3f2;
+  --success: #067647;
+  --success-surface: #ecfdf3;
+  --focus: #2f5bd3;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0f1115;
+    --surface: #171a21;
+    --surface-muted: #1e222b;
+    --border: #2c323d;
+    --foreground: #e8eaee;
+    --muted: #a0a7b4;
+    --primary: #7d9cf5;
+    --primary-hover: #9bb3f8;
+    --primary-foreground: #0f1115;
+    --danger: #fda29b;
+    --danger-surface: #2a1513;
+    --success: #75e0a7;
+    --success-surface: #0f2419;
+    --focus: #9bb3f8;
   }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-focus: var(--focus);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Visible keyboard focus everywhere (WCAG 2.4.7). */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }

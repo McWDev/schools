@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  serverExternalPackages: ["@node-rs/argon2"],
   turbopack: {
     rules: {
       "*.css": {

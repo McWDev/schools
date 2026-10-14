@@ -17,11 +17,14 @@
     "test:integration": "vitest run --project integration",
     "check:bundle": "node scripts/check-client-bundle.mjs",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed-dev.ts",
-    "db:rotate-runtime-password": "tsx scripts/rotate-runtime-password.ts"
+    "db:migrate": "tsx --conditions=react-server scripts/migrate.ts",
+    "db:seed": "tsx --conditions=react-server scripts/seed-dev.ts",
+    "db:rotate-runtime-password": "tsx --conditions=react-server scripts/rotate-runtime-password.ts",
+    "test:e2e": "playwright test",
+    "auth:bootstrap-admin": "tsx --conditions=react-server scripts/bootstrap-platform-admin.ts"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.2.2",
     "drizzle-orm": "^0.45.4",
     "next": "16.4.0",
     "pg": "^8.23.1",
@@ -32,6 +35,7 @@
   },
   "devDependencies": {
     "@next/env": "^16.4.0",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^24.19.2",
     "@types/pg": "^8.23.1",

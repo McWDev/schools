@@ -1,32 +1,39 @@
 import { loadEnvConfig } from "@next/env";
 
+import { hashPassword } from "@/server/auth/password";
+
 import { withClient } from "./lib/db-admin";
-import { insertSyntheticTenants } from "./lib/synthetic-tenants";
+import { insertSyntheticTenants, SYNTHETIC_PASSWORD } from "./lib/synthetic-tenants";
 
 loadEnvConfig(process.cwd());
 
 async function main(): Promise<void> {
   const url = process.env.MIGRATION_DATABASE_URL;
-  if (!url) {
-    console.error("MIGRATION_DATABASE_URL is not set.");
-    process.exit(1);
-  }
+  if (!url) throw new Error("MIGRATION_DATABASE_URL is not set.");
   if (process.env.NODE_ENV === "production") {
-    console.error("Refusing to seed synthetic data with NODE_ENV=production.");
-    process.exit(1);
+    throw new Error("Refusing to seed synthetic data with NODE_ENV=production.");
   }
 
   await withClient(url, async (client) => {
     const existing = await client.query(`SELECT 1 FROM schools WHERE slug = 'example-academy-a'`);
-    if (existing.rowCount) {
-      console.log("Synthetic tenants already present; nothing to do.");
-      return;
-    }
     await client.query("BEGIN");
     try {
-      await insertSyntheticTenants(client);
+      if (existing.rowCount) {
+        console.log("Synthetic tenants already present.");
+      } else {
+        await insertSyntheticTenants(client);
+        console.log("Seeded synthetic School A (2 branches) and School B (1 branch).");
+      }
+      // Synthetic accounts only (the reserved .test domain); real users are never touched.
+      const updated = await client.query(
+        `UPDATE users SET password_hash = $1
+         WHERE email LIKE '%@example.test' AND password_hash IS NULL`,
+        [await hashPassword(SYNTHETIC_PASSWORD)],
+      );
+      if (updated.rowCount) {
+        console.log(`Set the development password on ${updated.rowCount} synthetic account(s).`);
+      }
       await client.query("COMMIT");
-      console.log("Seeded synthetic School A (2 branches) and School B (1 branch).");
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

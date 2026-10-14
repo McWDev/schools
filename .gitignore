@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local email outbox (development only)
+/.outbox
+# playwright
+/test-results
+/playwright-report

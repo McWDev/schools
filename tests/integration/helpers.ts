@@ -51,7 +51,8 @@ export async function resetTenants(): Promise<SyntheticTenants> {
   await (
     await ownerClient()
   ).query(`
-    TRUNCATE audit_events, membership_branches, school_memberships, branches, users, schools CASCADE;
+    TRUNCATE auth_rate_limits, password_reset_tokens, sessions, audit_events, membership_branches,
+      school_memberships, branches, users, schools CASCADE;
     ${SYNTHETIC_TENANTS_SQL}
   `);
   return SYNTHETIC;

@@ -10,9 +10,13 @@ export const serverEnvSchema = z.object({
   DATABASE_URL: postgresUrl,
   MIGRATION_DATABASE_URL: postgresUrl.optional(),
   APP_URL: z.string().url().default("http://localhost:3217"),
+  /** "outbox" writes emails to .outbox/ for local use. Defaults to "disabled" in production. */
+  EMAIL_TRANSPORT: z.enum(["outbox", "disabled"]).optional(),
 });
 
-export type ServerEnv = z.infer<typeof serverEnvSchema>;
+export type ServerEnv = Omit<z.infer<typeof serverEnvSchema>, "EMAIL_TRANSPORT"> & {
+  EMAIL_TRANSPORT: "outbox" | "disabled";
+};
 
 export function parseServerEnv(source: Record<string, string | undefined>): ServerEnv {
   const result = serverEnvSchema.safeParse(source);
@@ -21,5 +25,10 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
     const fields = [...new Set(result.error.issues.map((issue) => issue.path.join(".")))];
     throw new Error(`Invalid server environment: ${fields.join(", ")}`);
   }
-  return result.data;
+  const data = result.data;
+  return {
+    ...data,
+    EMAIL_TRANSPORT:
+      data.EMAIL_TRANSPORT ?? (data.NODE_ENV === "production" ? "disabled" : "outbox"),
+  };
 }

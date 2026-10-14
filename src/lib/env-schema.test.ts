@@ -34,3 +34,14 @@ describe("parseServerEnv", () => {
     }
   });
 });
+
+describe("EMAIL_TRANSPORT", () => {
+  it("defaults to the local outbox outside production and to disabled in production", () => {
+    expect(parseServerEnv(valid).EMAIL_TRANSPORT).toBe("outbox");
+    expect(parseServerEnv({ ...valid, NODE_ENV: "production" }).EMAIL_TRANSPORT).toBe("disabled");
+    expect(
+      parseServerEnv({ ...valid, NODE_ENV: "production", EMAIL_TRANSPORT: "outbox" })
+        .EMAIL_TRANSPORT,
+    ).toBe("outbox");
+  });
+});

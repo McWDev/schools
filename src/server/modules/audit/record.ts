@@ -31,3 +31,22 @@ export async function recordAudit(
     metadata: input.metadata ?? {},
   });
 }
+
+/**
+ * Append an audit event that belongs to no school, such as a sign-in before any school is
+ * selected. Pass a transaction to commit it atomically with related writes.
+ */
+export async function recordPlatformAudit(
+  executor: Pick<Transaction, "insert">,
+  input: Omit<AuditInput, "branchId"> & { actorUserId?: string | null },
+): Promise<void> {
+  await executor.insert(auditEvents).values({
+    schoolId: null,
+    actorUserId: input.actorUserId ?? null,
+    action: input.action,
+    targetType: input.targetType,
+    targetId: input.targetId,
+    outcome: input.outcome ?? "success",
+    metadata: input.metadata ?? {},
+  });
+}

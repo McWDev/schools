@@ -28,6 +28,7 @@ async function main(): Promise<void> {
   });
   const runtimeUrl = await rotateRuntimePassword(ownerUrl);
   await rm(".outbox", { recursive: true, force: true });
+  await rm(".storage", { recursive: true, force: true });
 
   const server = spawn("npx", ["next", "start", "-p", String(E2E_PORT)], {
     stdio: "inherit",
@@ -38,6 +39,7 @@ async function main(): Promise<void> {
       DATABASE_URL: runtimeUrl,
       APP_URL: `http://localhost:${E2E_PORT}`,
       EMAIL_TRANSPORT: "outbox",
+      STORAGE_DRIVER: "local",
     },
   });
   const stop = () => server.kill();

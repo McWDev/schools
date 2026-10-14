@@ -1,11 +1,19 @@
 import "server-only";
 
-import { and, eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import type { Database, Transaction } from "@/server/db/client";
-import { membershipBranches, schoolMemberships, schools, users } from "@/server/db/schema";
+import {
+  membershipBranches,
+  membershipRoles,
+  rolePermissions,
+  schoolMemberships,
+  schools,
+  users,
+} from "@/server/db/schema";
 
-import { TenantAccessError } from "./errors";
+import { ForbiddenError, TenantAccessError } from "./errors";
+import type { PermissionCode } from "./permissions";
 
 export type TenantScope =
   { readonly kind: "school" } | { readonly kind: "branch"; readonly branchIds: readonly string[] };
@@ -15,6 +23,8 @@ export interface TenantContext {
   readonly userId: string;
   readonly membershipId: string;
   readonly scope: TenantScope;
+  /** Union of permissions from the roles on this membership, resolved server-side. */
+  readonly permissions: readonly PermissionCode[];
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -33,6 +43,7 @@ function issue(context: TenantContext): TenantContext {
             branchIds: Object.freeze([...context.scope.branchIds]),
           })
         : Object.freeze({ kind: "school" as const }),
+    permissions: Object.freeze([...context.permissions]),
   });
   issued.add(frozen);
   return frozen;
@@ -75,48 +86,44 @@ export async function resolveTenantContext(
   return db.transaction(async (tx) => {
     await applySessionSettings(tx, { userId: input.userId, schoolId: input.schoolId });
 
-    const [membership] = await tx
-      .select({ id: schoolMemberships.id, scope: schoolMemberships.scope })
-      .from(schoolMemberships)
-      .innerJoin(schools, eq(schools.id, schoolMemberships.schoolId))
-      .innerJoin(users, eq(users.id, schoolMemberships.userId))
-      .where(
-        and(
-          eq(schoolMemberships.userId, input.userId),
-          eq(schoolMemberships.schoolId, input.schoolId),
-          eq(schoolMemberships.status, "active"),
-          eq(schools.status, "active"),
-          eq(users.status, "active"),
-        ),
-      )
-      .limit(1);
-
+    // One round trip: the active membership plus its permissions and branch assignments.
+    const result = await tx.execute<{
+      id: string;
+      scope: "school" | "branch";
+      permissions: string[];
+      branch_ids: string[];
+    }>(sql`
+      select m.id, m.scope,
+        coalesce((
+          select array_agg(distinct rp.permission_code order by rp.permission_code)
+          from ${membershipRoles} mr
+          join ${rolePermissions} rp on rp.role_id = mr.role_id and rp.school_id = mr.school_id
+          where mr.membership_id = m.id and mr.school_id = m.school_id
+        ), '{}') as permissions,
+        coalesce((
+          select array_agg(mb.branch_id order by mb.branch_id)
+          from ${membershipBranches} mb
+          where mb.membership_id = m.id and mb.school_id = m.school_id
+        ), '{}') as branch_ids
+      from ${schoolMemberships} m
+      join ${schools} s on s.id = m.school_id
+      join ${users} u on u.id = m.user_id
+      where m.user_id = ${input.userId} and m.school_id = ${input.schoolId}
+        and m.status = 'active' and s.status = 'active' and u.status = 'active'
+      limit 1
+    `);
+    const membership = result.rows[0];
     if (!membership) throw new TenantAccessError();
-
-    if (membership.scope === "school") {
-      return issue({
-        schoolId: input.schoolId,
-        userId: input.userId,
-        membershipId: membership.id,
-        scope: { kind: "school" },
-      });
-    }
-
-    const assigned = await tx
-      .select({ branchId: membershipBranches.branchId })
-      .from(membershipBranches)
-      .where(
-        and(
-          eq(membershipBranches.membershipId, membership.id),
-          eq(membershipBranches.schoolId, input.schoolId),
-        ),
-      );
 
     return issue({
       schoolId: input.schoolId,
       userId: input.userId,
       membershipId: membership.id,
-      scope: { kind: "branch", branchIds: assigned.map((row) => row.branchId) },
+      scope:
+        membership.scope === "school"
+          ? { kind: "school" }
+          : { kind: "branch", branchIds: membership.branch_ids },
+      permissions: membership.permissions as PermissionCode[],
     });
   });
 }
@@ -145,4 +152,14 @@ export async function withTenant<T>(
 /** Whether the context may access a specific branch of its school. */
 export function canAccessBranch(context: TenantContext, branchId: string): boolean {
   return context.scope.kind === "school" || context.scope.branchIds.includes(branchId);
+}
+
+export function hasPermission(context: TenantContext, permission: PermissionCode): boolean {
+  return context.permissions.includes(permission);
+}
+
+/** Throws ForbiddenError unless the context holds the permission. */
+export function requirePermission(context: TenantContext, permission: PermissionCode): void {
+  assertTenantContext(context);
+  if (!hasPermission(context, permission)) throw new ForbiddenError();
 }

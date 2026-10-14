@@ -116,3 +116,18 @@ export async function switchSessionSchool(
     .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)));
   return token;
 }
+
+/**
+ * Record an automatically chosen school (the user has exactly one) so later requests skip the
+ * school lookup. Membership is still re-validated on every request, so no token rotation is needed.
+ */
+export async function rememberSessionSchool(
+  db: Database,
+  sessionId: string,
+  schoolId: string,
+): Promise<void> {
+  await db
+    .update(sessions)
+    .set({ activeSchoolId: schoolId })
+    .where(and(eq(sessions.id, sessionId), isNull(sessions.activeSchoolId)));
+}

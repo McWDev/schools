@@ -12,7 +12,11 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
-  serverExternalPackages: ["@node-rs/argon2"],
+  serverExternalPackages: ["@node-rs/argon2", "sharp"],
+  experimental: {
+    // Profile photos are capped at 2 MB by the server; allow room for multipart overhead.
+    serverActions: { bodySizeLimit: "3mb" },
+  },
   turbopack: {
     rules: {
       "*.css": {

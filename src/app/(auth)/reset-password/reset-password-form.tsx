@@ -1,32 +1,14 @@
 "use client";
 
-import { useActionState, useSyncExternalStore } from "react";
+import { useActionState } from "react";
 
 import { FormAlert, SubmitButton, TextField } from "@/components/forms";
+import { useFragmentToken } from "@/lib/use-fragment-token";
 
 import { resetPasswordAction, type FormState } from "../actions";
 
-let capturedToken: string | null = null;
-
-/**
- * Read the token from the URL fragment once, then remove it from the address bar and history so
- * it is not left on screen, in bookmarks, or in shared links. Fragments are never sent to the server.
- */
-function readTokenFromFragment(): string {
-  if (capturedToken === null) {
-    const match = /(?:^|&)token=([A-Za-z0-9_-]{20,100})/.exec(window.location.hash.slice(1));
-    capturedToken = match?.[1] ?? "";
-    if (window.location.hash) {
-      window.history.replaceState(null, "", window.location.pathname);
-    }
-  }
-  return capturedToken;
-}
-
-const subscribe = () => () => {};
-
 export function ResetPasswordForm() {
-  const token = useSyncExternalStore(subscribe, readTokenFromFragment, () => null);
+  const token = useFragmentToken();
   const [state, formAction] = useActionState<FormState, FormData>(resetPasswordAction, {});
 
   if (token === null) return null;

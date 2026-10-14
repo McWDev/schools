@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { logoutAction, switchSchoolAction } from "@/app/(auth)/actions";
+import { switchSchoolAction } from "@/app/(auth)/actions";
 import {
   getCurrentUserSchools,
   getRequestTenantContext,
@@ -13,11 +13,11 @@ export const metadata: Metadata = { title: "Dashboard · School Management" };
 // Placeholder protected page for Task 002. The full dashboard shell arrives in Task 004.
 export default function DashboardPage() {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10">
+    <>
       <Suspense fallback={<p className="text-muted text-sm">Loading your account…</p>}>
         <AccountSummary />
       </Suspense>
-    </main>
+    </>
   );
 }
 
@@ -38,14 +38,6 @@ async function AccountSummary() {
             {active ? `Current school: ${active.name}` : "No school selected"}
           </p>
         </div>
-        <form action={logoutAction}>
-          <button
-            type="submit"
-            className="border-border bg-surface hover:bg-surface-muted h-9 rounded-md border px-3 text-sm font-medium"
-          >
-            Sign out
-          </button>
-        </form>
       </header>
 
       <section

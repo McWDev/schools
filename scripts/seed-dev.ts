@@ -3,7 +3,11 @@ import { loadEnvConfig } from "@next/env";
 import { hashPassword } from "@/server/auth/password";
 
 import { withClient } from "./lib/db-admin";
-import { insertSyntheticTenants, SYNTHETIC_PASSWORD } from "./lib/synthetic-tenants";
+import {
+  insertSyntheticTenants,
+  SYNTHETIC_ACCESS_SQL,
+  SYNTHETIC_PASSWORD,
+} from "./lib/synthetic-tenants";
 
 loadEnvConfig(process.cwd());
 
@@ -19,7 +23,8 @@ async function main(): Promise<void> {
     await client.query("BEGIN");
     try {
       if (existing.rowCount) {
-        console.log("Synthetic tenants already present.");
+        console.log("Synthetic tenants already present; refreshing roles and access.");
+        await client.query(SYNTHETIC_ACCESS_SQL);
       } else {
         await insertSyntheticTenants(client);
         console.log("Seeded synthetic School A (2 branches) and School B (1 branch).");

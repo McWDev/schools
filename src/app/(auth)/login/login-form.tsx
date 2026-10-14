@@ -34,8 +34,17 @@ export function LoginForm() {
 
 export function ResetNotice() {
   const params = useSearchParams();
-  if (params.get("reset") !== "1") return null;
-  return (
-    <FormAlert tone="success">Your password was changed. Sign in with the new password.</FormAlert>
-  );
+  if (params.get("reset") === "1") {
+    return (
+      <FormAlert tone="success">
+        Your password was changed. Sign in with the new password.
+      </FormAlert>
+    );
+  }
+  if (params.get("activated") === "1") {
+    return (
+      <FormAlert tone="success">Your account is active. Sign in with your new password.</FormAlert>
+    );
+  }
+  return null;
 }

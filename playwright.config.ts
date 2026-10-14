@@ -11,7 +11,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   timeout: 90_000,
   // Generous: local runs reach the Neon test branch over the internet.
-  expect: { timeout: 15_000 },
+  expect: { timeout: process.env.CI ? 15_000 : 30_000 },
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: `http://localhost:${port}`,

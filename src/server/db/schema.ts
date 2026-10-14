@@ -80,6 +80,8 @@ export const users = pgTable(
     /** argon2id hash; null until the user sets a password via invitation or reset link. */
     passwordHash: text("password_hash"),
     passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
+    /** Generated storage key of the re-encoded profile photo; never a user-supplied name. */
+    avatarKey: text("avatar_key"),
     ...timestamps,
   },
   (t) => [
@@ -180,6 +182,8 @@ export const sessions = pgTable(
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    /** Last time the user re-entered their password; gates high-risk actions. */
+    reauthenticatedAt: timestamp("reauthenticated_at", { withTimezone: true }),
     userAgent: text("user_agent"),
   },
   (t) => [
@@ -213,3 +217,99 @@ export const authRateLimits = pgTable("auth_rate_limits", {
   count: integer("count").notNull(),
   resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
 });
+
+/** Stable permission codes, e.g. "users.invite". Defined by migrations, not by tenants. */
+export const permissions = pgTable("permissions", {
+  code: text("code").primaryKey(),
+  description: text("description").notNull(),
+});
+
+/** School-scoped roles. System roles are installed per school and cannot be edited. */
+export const roles = pgTable(
+  "roles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: uuid("school_id")
+      .notNull()
+      .references(() => schools.id, { onDelete: "restrict" }),
+    key: text("key").notNull(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    isSystem: boolean("is_system").notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [
+    unique("roles_school_id_key_key").on(t.schoolId, t.key),
+    unique("roles_school_id_id_key").on(t.schoolId, t.id),
+  ],
+);
+
+export const rolePermissions = pgTable(
+  "role_permissions",
+  {
+    schoolId: uuid("school_id").notNull(),
+    roleId: uuid("role_id").notNull(),
+    permissionCode: text("permission_code")
+      .notNull()
+      .references(() => permissions.code, { onDelete: "restrict" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.roleId, t.permissionCode] }),
+    foreignKey({
+      name: "role_permissions_role_fk",
+      columns: [t.schoolId, t.roleId],
+      foreignColumns: [roles.schoolId, roles.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Roles held by a membership. Both FKs include school_id, so roles cannot cross schools. */
+export const membershipRoles = pgTable(
+  "membership_roles",
+  {
+    schoolId: uuid("school_id").notNull(),
+    membershipId: uuid("membership_id").notNull(),
+    roleId: uuid("role_id").notNull(),
+    createdAt: timestamps.createdAt,
+  },
+  (t) => [
+    primaryKey({ columns: [t.membershipId, t.roleId] }),
+    foreignKey({
+      name: "membership_roles_membership_fk",
+      columns: [t.schoolId, t.membershipId],
+      foreignColumns: [schoolMemberships.schoolId, schoolMemberships.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "membership_roles_role_fk",
+      columns: [t.schoolId, t.roleId],
+      foreignColumns: [roles.schoolId, roles.id],
+    }).onDelete("restrict"),
+    index("membership_roles_school_id_role_id_idx").on(t.schoolId, t.roleId),
+  ],
+);
+
+/** Account-setup invitations. Only the SHA-256 hash of the emailed token is stored. */
+export const userInvitations = pgTable(
+  "user_invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: uuid("school_id")
+      .notNull()
+      .references(() => schools.id, { onDelete: "restrict" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    invitedByUserId: uuid("invited_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    tokenHash: text("token_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("user_invitations_token_hash_key").on(t.tokenHash),
+    index("user_invitations_school_id_user_id_idx").on(t.schoolId, t.userId),
+  ],
+);

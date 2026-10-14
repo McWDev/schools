@@ -7,6 +7,15 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   prettier,
+  {
+    rules: {
+      // Leading underscore marks an intentionally unused binding (e.g. an action ignoring prevState).
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true },
+      ],
+    },
+  },
   globalIgnores([".next/**", "out/**", "build/**", "coverage/**", "next-env.d.ts"]),
 ]);
 

@@ -11,7 +11,12 @@ import { TenantAccessError } from "@/server/tenancy/errors";
 import { listUserSchools, type UserSchool } from "@/server/tenancy/memberships";
 
 import { AUTH_POLICY } from "./config";
-import { switchSessionSchool, validateSession, type SessionUser } from "./sessions";
+import {
+  rememberSessionSchool,
+  switchSessionSchool,
+  validateSession,
+  type SessionUser,
+} from "./sessions";
 
 /** Secure cookies whenever the app is served over HTTPS (always in staging/production). */
 function secureCookies(): boolean {
@@ -85,14 +90,18 @@ export const getRequestTenantContext = cache(async (): Promise<TenantContext | n
   const db = getDatabase();
 
   let schoolId = session.activeSchoolId;
+  let autoSelected = false;
   if (!schoolId) {
     // Convenience: a user with exactly one school does not need to pick it.
     const schools = await getCurrentUserSchools();
     if (schools.length !== 1) return null;
     schoolId = schools[0].schoolId;
+    autoSelected = true;
   }
   try {
-    return await resolveTenantContext(db, { userId: session.userId, schoolId });
+    const context = await resolveTenantContext(db, { userId: session.userId, schoolId });
+    if (autoSelected) await rememberSessionSchool(db, session.sessionId, schoolId);
+    return context;
   } catch (error) {
     if (error instanceof TenantAccessError) return null;
     throw error;
@@ -112,4 +121,18 @@ export async function switchSchool(schoolId: string): Promise<boolean> {
   }
   await setSessionCookie(await switchSessionSchool(db, session.sessionId, schoolId));
   return true;
+}
+
+/**
+ * Session plus tenant context for a signed-in page. Redirects to sign-in without a session, and
+ * to the dashboard (school picker) when no school is selected.
+ */
+export async function requireTenantRequest(): Promise<{
+  session: SessionUser;
+  context: TenantContext;
+}> {
+  const session = await requireSession();
+  const context = await getRequestTenantContext();
+  if (!context) redirect("/dashboard");
+  return { session, context };
 }

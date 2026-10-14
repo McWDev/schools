@@ -6,7 +6,12 @@ import { z } from "zod";
 import type { Database } from "@/server/db/client";
 import { branches } from "@/server/db/schema";
 import { recordAudit } from "@/server/modules/audit/record";
-import { canAccessBranch, withTenant, type TenantContext } from "@/server/tenancy/context";
+import {
+  canAccessBranch,
+  requirePermission,
+  withTenant,
+  type TenantContext,
+} from "@/server/tenancy/context";
 import { ForbiddenError } from "@/server/tenancy/errors";
 
 export interface BranchView {
@@ -59,6 +64,7 @@ export async function listBranches(
   context: TenantContext,
   page: { limit?: number; offset?: number } = {},
 ): Promise<BranchView[]> {
+  requirePermission(context, "branches.read");
   const limit = Math.min(Math.max(page.limit ?? 50, 1), 100);
   const offset = Math.max(page.offset ?? 0, 0);
   return withTenant(db, context, (tx) =>
@@ -78,6 +84,7 @@ export async function getBranch(
   context: TenantContext,
   branchId: string,
 ): Promise<BranchView | null> {
+  requirePermission(context, "branches.read");
   if (!z.uuid().safeParse(branchId).success) return null;
   return withTenant(db, context, async (tx) => {
     const [row] = await tx
@@ -94,6 +101,8 @@ export async function createBranch(
   context: TenantContext,
   input: unknown,
 ): Promise<BranchView> {
+  requirePermission(context, "branches.manage");
+  // Creating a branch is a school-level action, even for a branch admin holding the permission.
   if (context.scope.kind !== "school") throw new ForbiddenError();
   const data = createBranchInput.parse(input);
   return withTenant(db, context, async (tx) => {
@@ -119,6 +128,7 @@ export async function updateBranch(
   input: unknown,
 ): Promise<BranchView | null> {
   if (!z.uuid().safeParse(branchId).success || !canAccessBranch(context, branchId)) return null;
+  requirePermission(context, "branches.manage");
   const data = updateBranchInput.parse(input);
   return withTenant(db, context, async (tx) => {
     const [row] = await tx

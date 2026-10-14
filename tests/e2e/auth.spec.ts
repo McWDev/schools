@@ -1,32 +1,10 @@
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
-
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import { SYNTHETIC_PASSWORD } from "../../scripts/lib/synthetic-tenants";
 
-async function signIn(page: Page, email: string, password: string): Promise<void> {
-  await page.goto("/login");
-  await page.getByLabel("Email address").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-}
+import { alert, attemptSignIn, latestEmailLink, resetData, signIn } from "./helpers";
 
-/** Our form alerts, excluding the route announcer Next.js renders with role="alert". */
-const alert = (page: Page, text: string) => page.getByRole("alert").filter({ hasText: text });
-
-async function latestResetLink(): Promise<string> {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const files = (await readdir(".outbox").catch(() => [])).sort();
-    if (files.length) {
-      const message = JSON.parse(await readFile(join(".outbox", files.at(-1)!), "utf8"));
-      const link = /(http\S+\/reset-password#token=\S+)/.exec(message.text)?.[1];
-      if (link) return link;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error("No reset email arrived in .outbox");
-}
+test.beforeEach(resetData);
 
 test.describe("protected routes", () => {
   test("redirects signed-out visitors from the dashboard to sign in", async ({ page }) => {
@@ -55,7 +33,7 @@ test.describe("protected routes", () => {
 
 test.describe("sign in and out", () => {
   test("shows a generic error for wrong credentials", async ({ page }) => {
-    await signIn(page, "admin.a@example.test", "definitely the wrong password");
+    await attemptSignIn(page, "admin.a@example.test", "definitely the wrong password");
     await expect(alert(page, "The email or password is incorrect.")).toBeVisible();
     await expect(page).toHaveURL(/\/login$/);
     // The email is kept so the user only re-types the password; the password is never echoed.
@@ -104,7 +82,7 @@ test.describe("password reset", () => {
     await page.getByRole("button", { name: "Send reset link" }).click();
     await expect(page.getByRole("status")).toContainText("If an account exists for that email");
 
-    const link = await latestResetLink();
+    const link = await latestEmailLink("/reset-password", "teacher.a1@example.test");
     await page.goto(link);
     // The token is removed from the address bar as soon as the page reads it.
     await expect(page).toHaveURL(/\/reset-password$/);

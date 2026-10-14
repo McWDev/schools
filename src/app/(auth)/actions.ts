@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { env } from "@/lib/env";
 import { AuthValidationError } from "@/server/auth/errors";
+import { acceptInvitation } from "@/server/auth/invitations";
 import { login } from "@/server/auth/login";
 import { requestPasswordReset, resetPassword } from "@/server/auth/password-reset";
 import {
@@ -132,4 +133,30 @@ export async function switchSchoolAction(data: FormData): Promise<void> {
     redirect("/dashboard?error=school");
   }
   redirect("/dashboard");
+}
+
+export async function acceptInvitationAction(_prev: FormState, data: FormData): Promise<FormState> {
+  const password = field(data, "password");
+  if (password !== field(data, "confirmPassword")) {
+    return { fieldErrors: { confirmPassword: "The passwords do not match." } };
+  }
+  try {
+    const result = await acceptInvitation(getDatabase(), {
+      token: field(data, "token"),
+      password,
+      ip: await getClientIp(),
+    });
+    if (!result.ok) {
+      const messages = {
+        rate_limited: "Too many attempts. Please wait a few minutes and try again.",
+        already_active: "Your account is already set up. Sign in with your password.",
+        invalid_token: "This invitation link is invalid or has expired. Ask for a new one.",
+      } as const;
+      return { error: messages[result.reason] };
+    }
+  } catch (error) {
+    if (error instanceof AuthValidationError) return { fieldErrors: { password: error.message } };
+    throw error;
+  }
+  redirect("/login?activated=1");
 }

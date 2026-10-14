@@ -43,3 +43,4 @@ Development branch: migrated and seeded. Verified that `app_runtime` connects th
 - Local integration runs take about 1–3 minutes because each query is a round trip to us-east-2. CI uses a local Postgres container and is much faster.
 - `users` has no RLS yet (global identity); see the follow-ups in the design record.
 - The Neon MCP connector signed out during this task. Branch management through Claude needs re-authorization, but the app and scripts are unaffected.
+- CI passed: https://github.com/McWDev/schools/actions/runs/38612933974

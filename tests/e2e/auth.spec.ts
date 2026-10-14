@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { SYNTHETIC_PASSWORD } from "../../scripts/lib/synthetic-tenants";
 
-import { alert, attemptSignIn, latestEmailLink, resetData, signIn } from "./helpers";
+import { alert, attemptSignIn, latestEmailLink, resetData, signIn, signOut } from "./helpers";
 
 test.beforeEach(resetData);
 
@@ -54,8 +54,7 @@ test.describe("sign in and out", () => {
     expect(me.status()).toBe(200);
     expect(await me.json()).toMatchObject({ user: { displayName: "Admin A" } });
 
-    await page.getByRole("button", { name: "Sign out" }).click();
-    await expect(page).toHaveURL(/\/login$/);
+    await signOut(page);
     // The revoked session no longer works even if the old cookie were replayed.
     const replay = await page.request.get("/api/me", {
       headers: { cookie: `session=${cookie!.value}` },

@@ -13,6 +13,7 @@ export const SYNTHETIC = {
     adminB: id(103),
     multiSchool: id(104),
     branchAdminA1: id(105),
+    platformAdmin: id(106),
   },
   memberships: {
     adminA: id(201),
@@ -64,6 +65,13 @@ JOIN roles r ON r.school_id = sc.id AND r.key = a.role_key
 ON CONFLICT DO NOTHING;
 `;
 
+/** A platform administrator with no school membership (sees aggregate platform data only). */
+export const SYNTHETIC_PLATFORM_ADMIN_SQL = `
+INSERT INTO users (id, email, display_name, status, is_platform_admin)
+VALUES ('${SYNTHETIC.users.platformAdmin}', 'platform@example.test', 'Platform Admin', 'active', true)
+ON CONFLICT (email) DO NOTHING;
+`;
+
 export const SYNTHETIC_TENANTS_SQL = `
 INSERT INTO schools (id, name, slug, status) VALUES
   ('${s.schoolA.id}', 'Example Academy A', 'example-academy-a', 'active'),
@@ -88,6 +96,7 @@ INSERT INTO school_memberships (id, school_id, user_id, scope) VALUES
 INSERT INTO membership_branches (school_id, membership_id, branch_id) VALUES
   ('${s.schoolA.id}', '${s.memberships.teacherA1}', '${s.schoolA.branchA1}');
 ${SYNTHETIC_ACCESS_SQL}
+${SYNTHETIC_PLATFORM_ADMIN_SQL}
 `;
 
 /** Inserts School A (2 branches) and School B (1 branch) with users at each scope. */

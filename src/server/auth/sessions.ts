@@ -15,6 +15,7 @@ export interface SessionUser {
   displayName: string;
   isPlatformAdmin: boolean;
   activeSchoolId: string | null;
+  activeBranchId: string | null;
 }
 
 const seconds = (n: number) => sql`make_interval(secs => ${n})`;
@@ -49,6 +50,7 @@ export async function validateSession(db: Database, token: string): Promise<Sess
       displayName: users.displayName,
       isPlatformAdmin: users.isPlatformAdmin,
       activeSchoolId: sessions.activeSchoolId,
+      activeBranchId: sessions.activeBranchId,
       needsTouch: sql<boolean>`${sessions.lastSeenAt} < now() - ${seconds(AUTH_POLICY.sessionTouchIntervalSeconds)}`,
     })
     .from(sessions)
@@ -112,7 +114,12 @@ export async function switchSessionSchool(
   const token = generateToken();
   await db
     .update(sessions)
-    .set({ activeSchoolId: schoolId, tokenHash: hashToken(token), lastSeenAt: sql`now()` })
+    .set({
+      activeSchoolId: schoolId,
+      activeBranchId: null,
+      tokenHash: hashToken(token),
+      lastSeenAt: sql`now()`,
+    })
     .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)));
   return token;
 }
@@ -130,4 +137,20 @@ export async function rememberSessionSchool(
     .update(sessions)
     .set({ activeSchoolId: schoolId })
     .where(and(eq(sessions.id, sessionId), isNull(sessions.activeSchoolId)));
+}
+
+/**
+ * Store the branch filter (null = all branches in scope). The caller must have validated that
+ * the branch is in the session school and inside the user scope; a composite foreign key also
+ * guarantees it belongs to the active school.
+ */
+export async function setSessionBranch(
+  db: Database,
+  sessionId: string,
+  branchId: string | null,
+): Promise<void> {
+  await db
+    .update(sessions)
+    .set({ activeBranchId: branchId })
+    .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)));
 }

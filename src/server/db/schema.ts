@@ -178,6 +178,8 @@ export const sessions = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     /** School selected by the user; always re-validated against active membership on use. */
     activeSchoolId: uuid("active_school_id").references(() => schools.id, { onDelete: "set null" }),
+    /** Optional branch filter inside the active school; validated against scope on every use. */
+    activeBranchId: uuid("active_branch_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

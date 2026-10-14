@@ -7,12 +7,14 @@ import { cache } from "react";
 import { env } from "@/lib/env";
 import { getDatabase } from "@/server/db/client";
 import { resolveTenantContext, type TenantContext } from "@/server/tenancy/context";
+import { resolveBranchFilter, type BranchOption } from "@/server/tenancy/branch-filter";
 import { TenantAccessError } from "@/server/tenancy/errors";
 import { listUserSchools, type UserSchool } from "@/server/tenancy/memberships";
 
 import { AUTH_POLICY } from "./config";
 import {
   rememberSessionSchool,
+  setSessionBranch,
   switchSessionSchool,
   validateSession,
   type SessionUser,
@@ -135,4 +137,28 @@ export async function requireTenantRequest(): Promise<{
   const context = await getRequestTenantContext();
   if (!context) redirect("/dashboard");
   return { session, context };
+}
+
+/**
+ * The branch filter for this request: the session's stored branch, re-validated against the
+ * current scope. Falls back to null ("all branches in scope") if access was removed meanwhile.
+ */
+export const getRequestBranch = cache(async (): Promise<BranchOption | null> => {
+  const session = await getCurrentSession();
+  const context = await getRequestTenantContext();
+  if (!session?.activeBranchId || !context) return null;
+  return resolveBranchFilter(getDatabase(), context, session.activeBranchId);
+});
+
+/** Validate and store a branch filter. Returns false for branches outside the user scope. */
+export async function switchBranch(branchId: string | null): Promise<boolean> {
+  const session = await getCurrentSession();
+  const context = await getRequestTenantContext();
+  if (!session || !context) return false;
+  const db = getDatabase();
+  if (branchId !== null && !(await resolveBranchFilter(db, context, branchId))) return false;
+  // The session must point at the school the context was resolved for (auto-selection included).
+  await rememberSessionSchool(db, session.sessionId, context.schoolId);
+  await setSessionBranch(db, session.sessionId, branchId);
+  return true;
 }

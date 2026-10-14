@@ -72,13 +72,41 @@ export async function resetData(): Promise<void> {
   const client = new Client({ connectionString: url });
   await client.connect();
   try {
-    await client.query(`
-      TRUNCATE auth_rate_limits, password_reset_tokens, sessions, audit_events, user_invitations,
-        membership_roles, membership_branches, school_memberships, branches, users, schools CASCADE;
-      ${SYNTHETIC_TENANTS_SQL}
-    `);
+    // The app server may still be finishing the previous test's requests (e.g. work scheduled
+    // with after()), which can deadlock with TRUNCATE. Retry the whole reset a few times.
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await client.query(`
+          BEGIN;
+          SET LOCAL lock_timeout = '5s';
+          TRUNCATE auth_rate_limits, password_reset_tokens, sessions, audit_events, user_invitations,
+            membership_roles, membership_branches, school_memberships, branches, users, schools CASCADE;
+          ${SYNTHETIC_TENANTS_SQL}
+          COMMIT;
+        `);
+        break;
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        const code = (error as { code?: string }).code;
+        const retryable = code === "40P01" || code === "55P03"; // deadlock, lock timeout
+        if (!retryable || attempt >= 4) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+      }
+    }
     await client.query(`UPDATE users SET password_hash = $1`, [await passwordHash]);
   } finally {
     await client.end();
   }
+}
+
+/** Open the account menu in the top bar and sign out. */
+export async function signOut(page: Page): Promise<void> {
+  await page.getByLabel("Account menu").click();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.waitForURL(/\/login$/);
+}
+
+/** Labels of the links in the main navigation. */
+export async function navLabels(page: Page): Promise<string[]> {
+  return page.getByRole("navigation", { name: "Main" }).getByRole("link").allInnerTexts();
 }

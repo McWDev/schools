@@ -1,0 +1,1 @@
+ALTER TABLE "sessions" ADD COLUMN "active_branch_id" uuid;

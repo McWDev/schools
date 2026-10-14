@@ -8,7 +8,7 @@ const postgresUrl = z
 export const serverEnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: postgresUrl,
-  DATABASE_URL_UNPOOLED: postgresUrl.optional(),
+  MIGRATION_DATABASE_URL: postgresUrl.optional(),
   APP_URL: z.string().url().default("http://localhost:3217"),
 });
 

@@ -2,9 +2,9 @@
 
 | Task | Title                                     | Status                | Evidence                         |
 | ---- | ----------------------------------------- | --------------------- | -------------------------------- |
-| 000  | Repository, tooling, environment baseline | Done, awaiting review | [TASK_000](evidence/TASK_000.md) |
-| 001  | SaaS tenancy foundation and isolation     | Next                  |                                  |
-| 002  | Authentication, login, sessions           | Not started           |                                  |
+| 000  | Repository, tooling, environment baseline | Accepted              | [TASK_000](evidence/TASK_000.md) |
+| 001  | SaaS tenancy foundation and isolation     | Done, awaiting review | [TASK_001](evidence/TASK_001.md) |
+| 002  | Authentication, login, sessions           | Next                  |                                  |
 | 003  | User management, roles, profile           | Not started           |                                  |
 | 004  | Professional dashboard                    | Not started           |                                  |
 | 005  | School onboarding and plans               | Not started           |                                  |

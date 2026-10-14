@@ -9,7 +9,7 @@
 - Zod for server-side validation, including environment variables (`src/lib/env-schema.ts`).
 
 ## Planned choices (confirmed in their tasks)
-- Database access: **Drizzle ORM** with the Neon serverless driver (Task 001). Migrations via `drizzle-kit`, committed under `drizzle/`.
+- Database access: **Drizzle ORM** with the `pg` driver (confirmed in Task 001; see `11_TENANCY_IMPLEMENTATION.md`). Migrations via `drizzle-kit`, committed under `drizzle/`.
 - Authentication: selected and documented in Task 002.
 
 ## Source layout
@@ -28,7 +28,8 @@ docs/                  Product and engineering documentation (Markdown only)
 ```
 
 Rules:
-- Every file under `src/server/`, plus `src/lib/env.ts`, imports `server-only`, so it cannot be bundled for the browser.
+- Every file under `src/server/`, plus `src/lib/env.ts`, imports `server-only`, so it cannot be bundled for the browser. Exception: `src/server/db/schema.ts` (table definitions only, loaded directly by drizzle-kit).
+- `scripts/` holds owner-level tooling (migrations, seeding, role setup). Application code never imports it.
 - Domain logic lives in `src/server/modules`, not in UI components or route files.
 - Unit tests sit next to the file they test (`*.test.ts`); cross-module and database tests go in `tests/`.
 

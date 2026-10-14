@@ -25,6 +25,6 @@ Date: 2026-10-14
 
 ## Known limitations
 - `npm audit` (including dev dependencies) reports 5 high-severity findings in `braces`, pulled in by `eslint-config-next` through `fast-glob`. They affect lint time only and are not shipped. npm's suggested fix downgrades to Next 14 tooling, so it is not applied. Revisit when `eslint-config-next` updates.
-- CI has not run on GitHub yet because no remote repository is configured.
+- CI passed on GitHub: https://github.com/McWDev/schools/actions/runs/38607081091
 - There is no content security policy yet. It will be added with authentication (Task 002), once script and style sources are known.
 - No screenshot was captured. Run `npm run dev` and open http://localhost:3217 to view the placeholder page.

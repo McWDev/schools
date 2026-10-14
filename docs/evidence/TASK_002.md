@@ -58,3 +58,4 @@ Development branch: migrated (0002, 0003), and the synthetic accounts have the d
 - **Stale rows** in `auth_rate_limits` and `sessions` are not pruned yet (Task 018).
 - **Per-IP rate limits** rely on the host overwriting `X-Forwarded-For`. This is a deployment requirement and is documented.
 - **Local test speed:** local e2e and integration runs are slow, about 1.5 and 4 minutes, because of the round trip to Neon in us-east-2. CI uses a local Postgres.
+- CI passed: https://github.com/McWDev/schools/actions/runs/38619238939

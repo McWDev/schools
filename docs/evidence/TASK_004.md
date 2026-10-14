@@ -56,3 +56,4 @@ The full integration suite (tenancy, auth, users, dashboard) runs in CI on every
 - **Navigation items.** The navigation shows only modules that exist (Dashboard, Users, Profile, Platform). Academic, finance, and other groups appear as their tasks land.
 - **Platform admin area.** The platform overview shows counts only. Onboarding and plan management come in Tasks 005 and 019.
 - **Activity timestamps.** Recent activity times are shown in UTC. Per-school timezone display comes with school settings (Task 005).
+- CI passed: https://github.com/McWDev/schools/actions/runs/38636048085

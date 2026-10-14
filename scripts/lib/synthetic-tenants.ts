@@ -51,4 +51,4 @@ export async function insertSyntheticTenants(client: Client): Promise<SyntheticT
 }
 
 /** Password given to synthetic users in end-to-end tests. Test databases only. */
-export const SYNTHETIC_PASSWORD = "correct horse battery staple";
+export const SYNTHETIC_PASSWORD = "password1234";

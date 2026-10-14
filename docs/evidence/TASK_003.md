@@ -59,3 +59,4 @@ Tenant context resolution now uses one query instead of three, and a single-scho
 - **Custom roles.** Custom role editing is not built; the six system roles are fixed for now.
 - **Status code for out-of-scope records.** With partial prerendering, an out-of-scope member page answers HTTP 200 and then streams the not-found page. No data is rendered; the e2e test checks that the content is absent.
 - **Local test speed.** Local runs are slow, about 12 minutes for integration and e2e combined, because of the round trip to Neon. CI uses a local Postgres.
+- CI passed: https://github.com/McWDev/schools/actions/runs/38632053716

@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { Card, NoAccess, PageHeader } from "@/components/ui";
-import { requireTenantRequest } from "@/server/auth/request";
+import { requireAccess } from "@/server/auth/request";
 import { getDatabase } from "@/server/db/client";
 import { getInviteOptions } from "@/server/modules/users/service";
-import { hasPermission } from "@/server/tenancy/context";
+import { hasPermission } from "@/server/access/context";
 
 import { InviteForm } from "./invite-form";
 
@@ -28,9 +28,9 @@ export default function InvitePage() {
 }
 
 async function InviteContent() {
-  const { context } = await requireTenantRequest();
-  if (!hasPermission(context, "users.invite")) return <NoAccess />;
-  const options = await getInviteOptions(getDatabase(), context);
+  const { access } = await requireAccess();
+  if (!hasPermission(access, "users.invite")) return <NoAccess />;
+  const options = await getInviteOptions(getDatabase(), access);
   return (
     <Card>
       <InviteForm {...options} />

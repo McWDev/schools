@@ -2,9 +2,10 @@ import "server-only";
 
 import type { Transaction } from "@/server/db/client";
 import { auditEvents } from "@/server/db/schema";
-import type { TenantContext } from "@/server/tenancy/context";
 
 export interface AuditInput {
+  /** The signed-in user who acted, or null for anonymous events such as a failed sign-in. */
+  actorUserId: string | null;
   action: string;
   targetType?: string;
   targetId?: string;
@@ -14,35 +15,17 @@ export interface AuditInput {
   metadata?: Record<string, unknown>;
 }
 
-/** Append an audit event inside the caller's transaction, so it commits or rolls back with it. */
+/**
+ * Append an audit event. Pass the caller's transaction so the event commits or rolls back with
+ * the change it describes.
+ */
 export async function recordAudit(
-  tx: Transaction,
-  context: TenantContext,
+  executor: Pick<Transaction, "insert">,
   input: AuditInput,
 ): Promise<void> {
-  await tx.insert(auditEvents).values({
-    schoolId: context.schoolId,
-    branchId: input.branchId,
-    actorUserId: context.userId,
-    action: input.action,
-    targetType: input.targetType,
-    targetId: input.targetId,
-    outcome: input.outcome ?? "success",
-    metadata: input.metadata ?? {},
-  });
-}
-
-/**
- * Append an audit event that belongs to no school, such as a sign-in before any school is
- * selected. Pass a transaction to commit it atomically with related writes.
- */
-export async function recordPlatformAudit(
-  executor: Pick<Transaction, "insert">,
-  input: Omit<AuditInput, "branchId"> & { actorUserId?: string | null },
-): Promise<void> {
   await executor.insert(auditEvents).values({
-    schoolId: null,
-    actorUserId: input.actorUserId ?? null,
+    actorUserId: input.actorUserId,
+    branchId: input.branchId,
     action: input.action,
     targetType: input.targetType,
     targetId: input.targetId,

@@ -6,7 +6,11 @@ import { hash } from "@node-rs/argon2";
 import type { Page } from "@playwright/test";
 import { Client } from "pg";
 
-import { SYNTHETIC_PASSWORD, SYNTHETIC_TENANTS_SQL } from "../../scripts/lib/synthetic-tenants";
+import {
+  RESET_SCHOOL_DATA_SQL,
+  SYNTHETIC_PASSWORD,
+  SYNTHETIC_SCHOOL_SQL,
+} from "../../scripts/lib/synthetic-school";
 
 /** Submit the sign-in form without waiting for the outcome (for failure cases). */
 export async function attemptSignIn(
@@ -54,7 +58,7 @@ export async function latestEmailLink(path: string, to?: string): Promise<string
 let passwordHash: Promise<string> | undefined;
 
 /**
- * Restore the synthetic tenants (and clear sessions, rate limits, invitations) so every test
+ * Restore the synthetic school (and clear sessions, rate limits, invitations) so every test
  * starts from the same state regardless of order. Test database only.
  */
 export async function resetData(): Promise<void> {
@@ -79,9 +83,8 @@ export async function resetData(): Promise<void> {
         await client.query(`
           BEGIN;
           SET LOCAL lock_timeout = '5s';
-          TRUNCATE auth_rate_limits, password_reset_tokens, sessions, audit_events, user_invitations,
-            membership_roles, membership_branches, school_memberships, branches, users, schools CASCADE;
-          ${SYNTHETIC_TENANTS_SQL}
+          ${RESET_SCHOOL_DATA_SQL}
+          ${SYNTHETIC_SCHOOL_SQL}
           COMMIT;
         `);
         break;

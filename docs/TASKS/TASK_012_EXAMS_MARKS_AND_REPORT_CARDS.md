@@ -12,4 +12,4 @@ Exam setup, subject/assessment components, marks, grading scale, result review/a
 - [ ] Unauthorized users cannot change approved results.
 - [ ] Changes to official marks are audited.
 - [ ] Report cards include only authorized student data.
-- [ ] Cross-tenant and cross-branch access tests pass.
+- [ ] Cross-branch access tests pass.

@@ -10,7 +10,7 @@ import { consumeRateLimit } from "@/server/auth/rate-limit";
 import { revokeUserSessions } from "@/server/auth/sessions";
 import type { Database } from "@/server/db/client";
 import { users } from "@/server/db/schema";
-import { recordPlatformAudit } from "@/server/modules/audit/record";
+import { recordAudit } from "@/server/modules/audit/record";
 import type { ObjectStorage } from "@/server/storage/object-storage";
 
 import { processAvatar } from "./avatar-image";
@@ -24,7 +24,7 @@ export async function updateOwnDisplayName(
 ): Promise<void> {
   const { displayName } = profileInput.parse(input);
   await db.update(users).set({ displayName }).where(eq(users.id, userId));
-  await recordPlatformAudit(db, {
+  await recordAudit(db, {
     action: "profile.update",
     actorUserId: userId,
     metadata: { fields: ["displayName"] },
@@ -51,7 +51,7 @@ export async function setOwnAvatar(
     .where(eq(users.id, userId));
   await db.update(users).set({ avatarKey: key }).where(eq(users.id, userId));
   if (previous?.key) await storage.delete(previous.key);
-  await recordPlatformAudit(db, { action: "profile.avatar.update", actorUserId: userId });
+  await recordAudit(db, { action: "profile.avatar.update", actorUserId: userId });
 }
 
 export async function removeOwnAvatar(
@@ -66,7 +66,7 @@ export async function removeOwnAvatar(
   if (!previous?.key) return;
   await db.update(users).set({ avatarKey: null }).where(eq(users.id, userId));
   await storage.delete(previous.key);
-  await recordPlatformAudit(db, { action: "profile.avatar.remove", actorUserId: userId });
+  await recordAudit(db, { action: "profile.avatar.remove", actorUserId: userId });
 }
 
 export type ChangePasswordResult =
@@ -102,7 +102,7 @@ export async function changeOwnPassword(
       .set({ passwordHash, passwordChangedAt: sql`now()` })
       .where(eq(users.id, session.userId));
     await revokeUserSessions(tx, session.userId, { exceptSessionId: session.sessionId });
-    await recordPlatformAudit(tx, {
+    await recordAudit(tx, {
       action: "profile.password.change",
       actorUserId: session.userId,
     });

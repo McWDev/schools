@@ -18,52 +18,20 @@ const SCHOOL_ADMIN = [
 ] as const;
 
 describe("buildNavigation", () => {
-  it("school admin sees users but not platform pages", () => {
-    expect(
-      labels(
-        buildNavigation({ permissions: SCHOOL_ADMIN, hasSchool: true, isPlatformAdmin: false }),
-      ),
-    ).toEqual(["Dashboard", "Users", "My profile"]);
+  it("school admin sees users", () => {
+    expect(labels(buildNavigation(SCHOOL_ADMIN))).toEqual(["Dashboard", "Users", "My profile"]);
   });
 
   it("branch admin with users.read sees users", () => {
-    const nav = buildNavigation({
-      permissions: ["branches.read", "users.read"],
-      hasSchool: true,
-      isPlatformAdmin: false,
-    });
-    expect(labels(nav)).toContain("Users");
+    expect(labels(buildNavigation(["branches.read", "users.read"]))).toContain("Users");
   });
 
   it("teacher sees only the dashboard and their profile", () => {
-    expect(
-      labels(
-        buildNavigation({
-          permissions: ["branches.read"],
-          hasSchool: true,
-          isPlatformAdmin: false,
-        }),
-      ),
-    ).toEqual(["Dashboard", "My profile"]);
+    expect(labels(buildNavigation(["branches.read"]))).toEqual(["Dashboard", "My profile"]);
   });
 
-  it("platform admin without a school sees platform pages but no school pages", () => {
-    expect(
-      labels(buildNavigation({ permissions: [], hasSchool: false, isPlatformAdmin: true })),
-    ).toEqual(["Dashboard", "Platform overview", "My profile"]);
-  });
-
-  it("school pages disappear when no school is selected, whatever the permissions", () => {
-    expect(
-      labels(
-        buildNavigation({ permissions: SCHOOL_ADMIN, hasSchool: false, isPlatformAdmin: false }),
-      ),
-    ).toEqual(["Dashboard", "My profile"]);
-  });
-
-  it("drops empty groups", () => {
-    const nav = buildNavigation({ permissions: [], hasSchool: true, isPlatformAdmin: false });
-    expect(nav.map((g) => g.label)).toEqual(["Overview", "Account"]);
+  it("drops groups that end up empty", () => {
+    expect(buildNavigation([]).map((g) => g.label)).toEqual(["Overview", "Account"]);
   });
 });
 

@@ -6,18 +6,18 @@ import { ZodError } from "zod";
 
 import { env } from "@/lib/env";
 import { confirmPassword, hasRecentAuthentication } from "@/server/auth/reauth";
-import { requireTenantRequest } from "@/server/auth/request";
+import { requireAccess } from "@/server/auth/request";
 import { getDatabase } from "@/server/db/client";
 import { getMailer } from "@/server/email/mailer";
+import { AccessDeniedError, ConflictError, ForbiddenError } from "@/server/access/errors";
 import {
-  inviteMember,
+  inviteStaff,
   resendInvitation,
-  setMemberAccess,
-  setMemberRoles,
-  setMemberStatus,
-  updateMemberProfile,
+  setStaffAccess,
+  setStaffRoles,
+  setStaffStatus,
+  updateStaffProfile,
 } from "@/server/modules/users/service";
-import { ConflictError, ForbiddenError, TenantAccessError } from "@/server/tenancy/errors";
 
 export interface UserFormState {
   error?: string;
@@ -53,7 +53,7 @@ function toState(error: unknown): UserFormState {
   }
   if (error instanceof ForbiddenError || error instanceof ConflictError)
     return { error: error.message };
-  if (error instanceof TenantAccessError)
+  if (error instanceof AccessDeniedError)
     return { error: "Your access has changed. Reload the page." };
   throw error;
 }
@@ -73,12 +73,12 @@ const needPassword: UserFormState = {
 };
 
 export async function inviteAction(_prev: UserFormState, data: FormData): Promise<UserFormState> {
-  const { context } = await requireTenantRequest();
-  let membershipId: string;
+  const { access } = await requireAccess();
+  let userId: string;
   try {
-    const result = await inviteMember(
+    const result = await inviteStaff(
       getDatabase(),
-      context,
+      access,
       getMailer(),
       {
         email: text(data, "email"),
@@ -88,7 +88,7 @@ export async function inviteAction(_prev: UserFormState, data: FormData): Promis
       },
       env().APP_URL,
     );
-    membershipId = result.membershipId;
+    userId = result.userId;
   } catch (error) {
     return {
       ...toState(error),
@@ -96,20 +96,20 @@ export async function inviteAction(_prev: UserFormState, data: FormData): Promis
     };
   }
   revalidatePath("/dashboard/users");
-  redirect(`/dashboard/users/${membershipId}?invited=1`);
+  redirect(`/dashboard/users/${userId}?invited=1`);
 }
 
 export async function updateRolesAction(
   _prev: UserFormState,
   data: FormData,
 ): Promise<UserFormState> {
-  const { session, context } = await requireTenantRequest();
+  const { session, access } = await requireAccess();
   if (!(await ensureRecentAuth(session, data))) return needPassword;
   try {
-    const member = await setMemberRoles(
+    const member = await setStaffRoles(
       getDatabase(),
-      context,
-      text(data, "membershipId"),
+      access,
+      text(data, "userId"),
       list(data, "roleIds"),
     );
     if (!member) return { error: "This person is no longer in your scope." };
@@ -124,23 +124,21 @@ export async function updateAccessAction(
   _prev: UserFormState,
   data: FormData,
 ): Promise<UserFormState> {
-  const { session, context } = await requireTenantRequest();
+  const { session, access } = await requireAccess();
   if (!(await ensureRecentAuth(session, data))) return needPassword;
+  let stillVisible = true;
   try {
-    const member = await setMemberAccess(
+    stillVisible = !!(await setStaffAccess(
       getDatabase(),
-      context,
-      text(data, "membershipId"),
+      access,
+      text(data, "userId"),
       accessFrom(data),
-    );
-    if (!member) {
-      revalidatePath("/dashboard/users");
-      redirect("/dashboard/users?moved=1");
-    }
+    ));
   } catch (error) {
     return toState(error);
   }
   revalidatePath("/dashboard/users");
+  if (!stillVisible) redirect("/dashboard/users?moved=1");
   return { message: "Branch access updated." };
 }
 
@@ -148,16 +146,11 @@ export async function updateStatusAction(
   _prev: UserFormState,
   data: FormData,
 ): Promise<UserFormState> {
-  const { session, context } = await requireTenantRequest();
+  const { session, access } = await requireAccess();
   if (!(await ensureRecentAuth(session, data))) return needPassword;
-  const status = text(data, "status") === "active" ? "active" : "suspended";
+  const status = text(data, "status") === "active" ? "active" : "deactivated";
   try {
-    const member = await setMemberStatus(
-      getDatabase(),
-      context,
-      text(data, "membershipId"),
-      status,
-    );
+    const member = await setStaffStatus(getDatabase(), access, text(data, "userId"), status);
     if (!member) return { error: "This person is no longer in your scope." };
   } catch (error) {
     return toState(error);
@@ -170,9 +163,9 @@ export async function updateProfileAction(
   _prev: UserFormState,
   data: FormData,
 ): Promise<UserFormState> {
-  const { context } = await requireTenantRequest();
+  const { access } = await requireAccess();
   try {
-    const member = await updateMemberProfile(getDatabase(), context, text(data, "membershipId"), {
+    const member = await updateStaffProfile(getDatabase(), access, text(data, "userId"), {
       displayName: text(data, "displayName"),
     });
     if (!member) return { error: "This person is no longer in your scope." };
@@ -187,13 +180,13 @@ export async function resendInvitationAction(
   _prev: UserFormState,
   data: FormData,
 ): Promise<UserFormState> {
-  const { context } = await requireTenantRequest();
+  const { access } = await requireAccess();
   try {
     const sent = await resendInvitation(
       getDatabase(),
-      context,
+      access,
       getMailer(),
-      text(data, "membershipId"),
+      text(data, "userId"),
       env().APP_URL,
     );
     return sent

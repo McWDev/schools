@@ -1,10 +1,11 @@
 import { Client } from "pg";
 
 import {
-  SYNTHETIC_TENANTS_SQL,
+  RESET_SCHOOL_DATA_SQL,
   SYNTHETIC,
-  type SyntheticTenants,
-} from "../../scripts/lib/synthetic-tenants";
+  SYNTHETIC_SCHOOL_SQL,
+  type SyntheticSchool,
+} from "../../scripts/lib/synthetic-school";
 
 export function ownerUrl(): string {
   const url = process.env.TEST_OWNER_DATABASE_URL;
@@ -46,14 +47,8 @@ export async function ownerQuery<T extends Record<string, unknown>>(
   return (await (await ownerClient()).query<T>(text, values)).rows;
 }
 
-/** Wipes tenant data and re-seeds the synthetic schools in a single round trip. */
-export async function resetTenants(): Promise<SyntheticTenants> {
-  await (
-    await ownerClient()
-  ).query(`
-    TRUNCATE auth_rate_limits, password_reset_tokens, sessions, audit_events, user_invitations,
-      membership_roles, membership_branches, school_memberships, branches, users, schools CASCADE;
-    ${SYNTHETIC_TENANTS_SQL}
-  `);
+/** Wipes school data and re-seeds the synthetic school in a single round trip. */
+export async function resetSchool(): Promise<SyntheticSchool> {
+  await (await ownerClient()).query(`${RESET_SCHOOL_DATA_SQL}\n${SYNTHETIC_SCHOOL_SQL}`);
   return SYNTHETIC;
 }

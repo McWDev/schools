@@ -5,7 +5,7 @@ import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Database } from "@/server/db/client";
 import { passwordResetTokens, users } from "@/server/db/schema";
 import type { Mailer } from "@/server/email/mailer";
-import { recordPlatformAudit } from "@/server/modules/audit/record";
+import { recordAudit } from "@/server/modules/audit/record";
 
 import { AUTH_POLICY } from "./config";
 import { AuthValidationError } from "./errors";
@@ -74,7 +74,7 @@ export async function requestPasswordReset(
       "If you did not ask for this, you can ignore this email; your password will not change.",
     ].join("\n"),
   });
-  await recordPlatformAudit(db, { action: "auth.password_reset.request", actorUserId: user.id });
+  await recordAudit(db, { action: "auth.password_reset.request", actorUserId: user.id });
 }
 
 export type ResetResult =
@@ -122,7 +122,7 @@ export async function resetPassword(
     if (!user) return { ok: false, reason: "invalid_token" } as const;
 
     await revokeUserSessions(tx, user.id);
-    await recordPlatformAudit(tx, { action: "auth.password_reset.complete", actorUserId: user.id });
+    await recordAudit(tx, { action: "auth.password_reset.complete", actorUserId: user.id });
     return { ok: true, userId: user.id } as const;
   });
 }

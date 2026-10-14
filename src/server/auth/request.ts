@@ -5,20 +5,14 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { env } from "@/lib/env";
+import { resolveBranchFilter, type BranchOption } from "@/server/access/branch-filter";
+import { resolveAccessContext, type AccessContext } from "@/server/access/context";
+import { AccessDeniedError } from "@/server/access/errors";
+import { getSchoolProfile, type SchoolProfile } from "@/server/access/school";
 import { getDatabase } from "@/server/db/client";
-import { resolveTenantContext, type TenantContext } from "@/server/tenancy/context";
-import { resolveBranchFilter, type BranchOption } from "@/server/tenancy/branch-filter";
-import { TenantAccessError } from "@/server/tenancy/errors";
-import { listUserSchools, type UserSchool } from "@/server/tenancy/memberships";
 
 import { AUTH_POLICY } from "./config";
-import {
-  rememberSessionSchool,
-  setSessionBranch,
-  switchSessionSchool,
-  validateSession,
-  type SessionUser,
-} from "./sessions";
+import { setSessionBranch, validateSession, type SessionUser } from "./sessions";
 
 /** Secure cookies whenever the app is served over HTTPS (always in staging/production). */
 function secureCookies(): boolean {
@@ -75,69 +69,33 @@ export async function requireSession(): Promise<SessionUser> {
   return session;
 }
 
-/** Schools the signed-in user may switch into, loaded once per request. */
-export const getCurrentUserSchools = cache(async (): Promise<UserSchool[]> => {
-  const session = await getCurrentSession();
-  return session ? listUserSchools(getDatabase(), session.userId) : [];
-});
-
 /**
- * Tenant context for this request, derived only from the server-side session and the user's
- * active membership — never from cookies, URLs, or form fields. Returns null when no school is
- * selected or the membership is no longer active.
+ * The signed-in user's access for this request — scope, branches, and permissions — resolved
+ * from the server-side session only, never from cookies, URLs, or form fields.
  */
-export const getRequestTenantContext = cache(async (): Promise<TenantContext | null> => {
+export const getRequestAccess = cache(async (): Promise<AccessContext | null> => {
   const session = await getCurrentSession();
   if (!session) return null;
-  const db = getDatabase();
-
-  let schoolId = session.activeSchoolId;
-  let autoSelected = false;
-  if (!schoolId) {
-    // Convenience: a user with exactly one school does not need to pick it.
-    const schools = await getCurrentUserSchools();
-    if (schools.length !== 1) return null;
-    schoolId = schools[0].schoolId;
-    autoSelected = true;
-  }
   try {
-    const context = await resolveTenantContext(db, { userId: session.userId, schoolId });
-    if (autoSelected) await rememberSessionSchool(db, session.sessionId, schoolId);
-    return context;
+    return await resolveAccessContext(getDatabase(), session.userId);
   } catch (error) {
-    if (error instanceof TenantAccessError) return null;
+    if (error instanceof AccessDeniedError) return null;
     throw error;
   }
 });
 
-/** Validate membership, store the selection server-side, and rotate the session token. */
-export async function switchSchool(schoolId: string): Promise<boolean> {
-  const session = await getCurrentSession();
-  if (!session) return false;
-  const db = getDatabase();
-  try {
-    await resolveTenantContext(db, { userId: session.userId, schoolId });
-  } catch (error) {
-    if (error instanceof TenantAccessError) return false;
-    throw error;
-  }
-  await setSessionCookie(await switchSessionSchool(db, session.sessionId, schoolId));
-  return true;
+/** Session plus access context for a signed-in page; redirects to sign-in otherwise. */
+export async function requireAccess(): Promise<{ session: SessionUser; access: AccessContext }> {
+  const session = await requireSession();
+  const access = await getRequestAccess();
+  if (!access) redirect("/login");
+  return { session, access };
 }
 
-/**
- * Session plus tenant context for a signed-in page. Redirects to sign-in without a session, and
- * to the dashboard (school picker) when no school is selected.
- */
-export async function requireTenantRequest(): Promise<{
-  session: SessionUser;
-  context: TenantContext;
-}> {
-  const session = await requireSession();
-  const context = await getRequestTenantContext();
-  if (!context) redirect("/dashboard");
-  return { session, context };
-}
+/** The school's public profile (name, timezone), loaded once per request. */
+export const getRequestSchool = cache(async (): Promise<SchoolProfile> =>
+  getSchoolProfile(getDatabase()),
+);
 
 /**
  * The branch filter for this request: the session's stored branch, re-validated against the
@@ -145,20 +103,18 @@ export async function requireTenantRequest(): Promise<{
  */
 export const getRequestBranch = cache(async (): Promise<BranchOption | null> => {
   const session = await getCurrentSession();
-  const context = await getRequestTenantContext();
-  if (!session?.activeBranchId || !context) return null;
-  return resolveBranchFilter(getDatabase(), context, session.activeBranchId);
+  const access = await getRequestAccess();
+  if (!session?.activeBranchId || !access) return null;
+  return resolveBranchFilter(getDatabase(), access, session.activeBranchId);
 });
 
 /** Validate and store a branch filter. Returns false for branches outside the user scope. */
 export async function switchBranch(branchId: string | null): Promise<boolean> {
   const session = await getCurrentSession();
-  const context = await getRequestTenantContext();
-  if (!session || !context) return false;
+  const access = await getRequestAccess();
+  if (!session || !access) return false;
   const db = getDatabase();
-  if (branchId !== null && !(await resolveBranchFilter(db, context, branchId))) return false;
-  // The session must point at the school the context was resolved for (auto-selection included).
-  await rememberSessionSchool(db, session.sessionId, context.schoolId);
+  if (branchId !== null && !(await resolveBranchFilter(db, access, branchId))) return false;
   await setSessionBranch(db, session.sessionId, branchId);
   return true;
 }

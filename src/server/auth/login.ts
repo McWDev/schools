@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import type { Database } from "@/server/db/client";
 import { users } from "@/server/db/schema";
-import { recordPlatformAudit } from "@/server/modules/audit/record";
+import { recordAudit } from "@/server/modules/audit/record";
 
 import { AUTH_POLICY } from "./config";
 import { verifyAgainstDummy, verifyPassword } from "./password";
@@ -33,7 +33,8 @@ export async function login(
     consumeRateLimit(db, `login:email:${email}`, loginPerEmail),
   ]);
   if (!byIp.allowed || !byEmail.allowed) {
-    await recordPlatformAudit(db, {
+    await recordAudit(db, {
+      actorUserId: null,
       action: "auth.login",
       outcome: "denied",
       metadata: { reason: "rate_limited" },
@@ -61,7 +62,7 @@ export async function login(
       : !passwordOk
         ? "bad_password"
         : `status_${user.status}`;
-    await recordPlatformAudit(db, {
+    await recordAudit(db, {
       action: "auth.login",
       outcome: "failure",
       actorUserId: user?.id ?? null,
@@ -72,6 +73,6 @@ export async function login(
 
   await clearRateLimit(db, `login:email:${email}`);
   const token = await createSession(db, user.id, { userAgent: input.userAgent });
-  await recordPlatformAudit(db, { action: "auth.login", outcome: "success", actorUserId: user.id });
+  await recordAudit(db, { action: "auth.login", outcome: "success", actorUserId: user.id });
   return { ok: true, token, userId: user.id };
 }

@@ -3,13 +3,13 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { Avatar, Badge, Card, NoAccess, PageHeader } from "@/components/ui";
+import { hasPermission } from "@/server/access/context";
 import { hasRecentAuthentication } from "@/server/auth/reauth";
-import { requireTenantRequest } from "@/server/auth/request";
+import { requireAccess } from "@/server/auth/request";
 import { getDatabase } from "@/server/db/client";
-import { getInviteOptions, getMember } from "@/server/modules/users/service";
-import { hasPermission } from "@/server/tenancy/context";
+import { getInviteOptions, getStaff } from "@/server/modules/users/service";
 
-import { memberStatus } from "../member-status";
+import { staffStatus } from "../member-status";
 import {
   AccessForm,
   DetailsForm,
@@ -20,39 +20,40 @@ import {
 
 export const metadata: Metadata = { title: "User · School Management" };
 
-export default function MemberPage(props: PageProps<"/dashboard/users/[membershipId]">) {
+export default function StaffPage(props: PageProps<"/dashboard/users/[userId]">) {
   return (
     <Suspense fallback={<p className="text-muted text-sm">Loading…</p>}>
-      <MemberContent params={props.params} searchParams={props.searchParams} />
+      <StaffContent params={props.params} searchParams={props.searchParams} />
     </Suspense>
   );
 }
 
-async function MemberContent({
+async function StaffContent({
   params,
   searchParams,
 }: {
-  params: PageProps<"/dashboard/users/[membershipId]">["params"];
-  searchParams: PageProps<"/dashboard/users/[membershipId]">["searchParams"];
+  params: PageProps<"/dashboard/users/[userId]">["params"];
+  searchParams: PageProps<"/dashboard/users/[userId]">["searchParams"];
 }) {
-  const { session, context } = await requireTenantRequest();
-  if (!hasPermission(context, "users.read")) return <NoAccess />;
-  const { membershipId } = await params;
+  const { session, access } = await requireAccess();
+  if (!hasPermission(access, "users.read")) return <NoAccess />;
+  const { userId } = await params;
   const db = getDatabase();
-  const member = await getMember(db, context, membershipId);
-  // Out-of-scope and other-school IDs are indistinguishable from IDs that do not exist.
+  const member = await getStaff(db, access, userId);
+  // Out-of-scope IDs are indistinguishable from IDs that do not exist.
   if (!member) notFound();
 
   const [options, recentAuth, query] = await Promise.all([
-    getInviteOptions(db, context),
+    getInviteOptions(db, access),
     hasRecentAuthentication(db, session.sessionId),
     searchParams,
   ]);
-  const status = memberStatus(member);
-  const canAssign = hasPermission(context, "users.assign_roles") && !member.isSelf;
-  const canDeactivate = hasPermission(context, "users.deactivate") && !member.isSelf;
-  const canUpdate = hasPermission(context, "users.update");
-  const canInvite = hasPermission(context, "users.invite") && !member.isSelf;
+  const status = staffStatus(member);
+  const hasNoAccess = member.status === "deactivated" || member.status === "suspended";
+  const canAssign = hasPermission(access, "users.assign_roles") && !member.isSelf;
+  const canDeactivate = hasPermission(access, "users.deactivate") && !member.isSelf;
+  const canUpdate = hasPermission(access, "users.update");
+  const canInvite = hasPermission(access, "users.invite") && !member.isSelf;
 
   return (
     <>
@@ -67,9 +68,7 @@ async function MemberContent({
           role="status"
           className="border-success/30 bg-success-surface text-success rounded-md border px-3 py-2 text-sm"
         >
-          {member.userStatus === "invited"
-            ? "Invitation sent. The link expires in 7 days."
-            : "Added. They can sign in with their existing account."}
+          Invitation sent. The link expires in 7 days.
         </p>
       )}
 
@@ -97,14 +96,14 @@ async function MemberContent({
               <dd className="mt-0.5">
                 {member.scope === "school"
                   ? "All branches"
-                  : member.branches.map((b) => b.name).join(", ")}
+                  : member.branches.map((b) => b.name).join(", ") || "None"}
               </dd>
             </div>
           </dl>
         </div>
-        {member.userStatus === "invited" && canInvite && (
+        {member.status === "invited" && canInvite && (
           <div className="border-border mt-4 border-t pt-4">
-            <ResendInvitationForm membershipId={member.membershipId} />
+            <ResendInvitationForm userId={member.userId} />
           </div>
         )}
       </Card>
@@ -117,14 +116,14 @@ async function MemberContent({
 
       {canUpdate && (
         <Card title="Details">
-          <DetailsForm membershipId={member.membershipId} displayName={member.displayName} />
+          <DetailsForm userId={member.userId} displayName={member.displayName} />
         </Card>
       )}
       {canAssign && (
         <>
           <Card title="Roles" description="Roles decide what this person can do.">
             <RolesForm
-              membershipId={member.membershipId}
+              userId={member.userId}
               roles={options.roles}
               selected={member.roles.map((r) => r.id)}
               needsPassword={!recentAuth}
@@ -135,7 +134,7 @@ async function MemberContent({
             description="Branches whose records this person can work with."
           >
             <AccessForm
-              membershipId={member.membershipId}
+              userId={member.userId}
               branches={options.branches}
               canGrantSchoolScope={options.canGrantSchoolScope}
               scope={member.scope}
@@ -147,16 +146,16 @@ async function MemberContent({
       )}
       {canDeactivate && (
         <Card
-          title={member.membershipStatus === "suspended" ? "Restore access" : "Remove access"}
+          title={hasNoAccess ? "Restore access" : "Remove access"}
           description={
-            member.membershipStatus === "suspended"
-              ? "They will be able to work in this school again."
-              : "They will be signed out of this school immediately. Their history is kept. If this is their only school, their account is deactivated."
+            hasNoAccess
+              ? "They will be able to sign in and work again."
+              : "Their account is deactivated and they are signed out immediately. Their history is kept."
           }
         >
           <StatusForm
-            membershipId={member.membershipId}
-            suspended={member.membershipStatus === "suspended"}
+            userId={member.userId}
+            suspended={hasNoAccess}
             name={member.displayName}
             needsPassword={!recentAuth}
           />

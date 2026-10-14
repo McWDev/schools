@@ -25,6 +25,10 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  // The app has no public landing page: go straight to the dashboard (sign-in if needed).
+  async redirects() {
+    return [{ source: "/", destination: "/dashboard", permanent: false }];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

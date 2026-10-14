@@ -2,23 +2,21 @@ import "server-only";
 
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 
+import type { AccessContext } from "@/server/access/context";
+import { ForbiddenError } from "@/server/access/errors";
+import type { PermissionCode } from "@/server/access/permissions";
 import type { Transaction } from "@/server/db/client";
-import { branches, rolePermissions, roles, schoolMemberships } from "@/server/db/schema";
-import type { TenantContext } from "@/server/tenancy/context";
-import { ForbiddenError } from "@/server/tenancy/errors";
-import type { PermissionCode } from "@/server/tenancy/permissions";
+import { branches, rolePermissions, roles, users } from "@/server/db/schema";
 
 export type AccessGrant = { scope: "school" } | { scope: "branch"; branchIds: string[] };
 
 /**
- * Memberships the actor may see and manage. A school-scoped actor sees every membership of the
- * school. A branch-scoped actor sees only branch-scoped memberships whose branches all lie
- * inside the actor's own branches, so a branch admin can never reach a school-wide admin or
- * someone who also works at another branch.
+ * Staff the actor may see and manage. A school-wide actor sees everyone. A branch-scoped actor
+ * sees only branch-scoped staff whose branches all lie inside the actor's own branches, so a
+ * branch admin can never reach a school-wide admin or someone who also works at another branch.
  */
-export function visibleMembershipsFilter(context: TenantContext): SQL {
-  const inSchool = eq(schoolMemberships.schoolId, context.schoolId);
-  if (context.scope.kind === "school") return inSchool;
+export function visibleUsersFilter(context: AccessContext): SQL | undefined {
+  if (context.scope.kind === "school") return undefined;
   const mine = context.scope.branchIds;
   if (mine.length === 0) return sql`false`;
   const myBranches = sql`array[${sql.join(
@@ -26,20 +24,19 @@ export function visibleMembershipsFilter(context: TenantContext): SQL {
     sql`, `,
   )}]`;
   return and(
-    inSchool,
-    eq(schoolMemberships.scope, "branch"),
-    sql`exists (select 1 from membership_branches mb where mb.membership_id = ${schoolMemberships.id})`,
+    eq(users.accessScope, "branch"),
+    sql`exists (select 1 from user_branches ub where ub.user_id = ${users.id})`,
     sql`not exists (
-      select 1 from membership_branches mb
-      where mb.membership_id = ${schoolMemberships.id} and mb.branch_id <> all (${myBranches})
+      select 1 from user_branches ub
+      where ub.user_id = ${users.id} and ub.branch_id <> all (${myBranches})
     )`,
-  )!;
+  );
 }
 
-/** The actor may only hand out access they hold themselves. */
+/** The actor may only hand out branch access they hold themselves. */
 export async function assertCanGrantAccess(
   tx: Transaction,
-  context: TenantContext,
+  context: AccessContext,
   access: AccessGrant,
 ): Promise<void> {
   if (access.scope === "school") {
@@ -58,39 +55,33 @@ export async function assertCanGrantAccess(
   const found = await tx
     .select({ id: branches.id })
     .from(branches)
-    .where(and(eq(branches.schoolId, context.schoolId), inArray(branches.id, requested)));
+    .where(inArray(branches.id, requested));
   if (found.length !== requested.length) {
-    throw new ForbiddenError("One or more selected branches are not part of this school.");
+    throw new ForbiddenError("One or more selected branches do not exist.");
   }
 }
 
 /**
- * Roles must belong to this school, and every permission they carry must already be held by
- * the actor. This blocks escalation: a branch admin cannot hand out the school admin role.
- * Returns the validated roles.
+ * Every permission a granted role carries must already be held by the actor. This blocks
+ * escalation: a branch admin cannot hand out the school admin role. Returns the validated roles.
  */
 export async function assertCanGrantRoles(
   tx: Transaction,
-  context: TenantContext,
+  context: AccessContext,
   roleIds: string[],
 ): Promise<{ id: string; key: string }[]> {
   const requested = [...new Set(roleIds)];
   const found = await tx
     .select({ id: roles.id, key: roles.key })
     .from(roles)
-    .where(and(eq(roles.schoolId, context.schoolId), inArray(roles.id, requested)));
+    .where(inArray(roles.id, requested));
   if (found.length !== requested.length) {
-    throw new ForbiddenError("One or more selected roles are not available in this school.");
+    throw new ForbiddenError("One or more selected roles do not exist.");
   }
   const perms = await tx
     .selectDistinct({ code: rolePermissions.permissionCode })
     .from(rolePermissions)
-    .where(
-      and(
-        eq(rolePermissions.schoolId, context.schoolId),
-        inArray(rolePermissions.roleId, requested),
-      ),
-    );
+    .where(inArray(rolePermissions.roleId, requested));
   const held = new Set<string>(context.permissions);
   if (perms.some((p) => !held.has(p.code))) {
     throw new ForbiddenError("You cannot assign a role with permissions you do not have yourself.");
@@ -101,7 +92,7 @@ export async function assertCanGrantRoles(
 /** Roles whose permissions are all held by the actor — the ones the UI may offer. */
 export async function listAssignableRoles(
   tx: Transaction,
-  context: TenantContext,
+  context: AccessContext,
 ): Promise<{ id: string; key: string; name: string; description: string }[]> {
   const rows = await tx
     .select({
@@ -115,7 +106,6 @@ export async function listAssignableRoles(
     })
     .from(roles)
     .leftJoin(rolePermissions, eq(rolePermissions.roleId, roles.id))
-    .where(eq(roles.schoolId, context.schoolId))
     .groupBy(roles.id)
     .orderBy(roles.name);
   const held = new Set<string>(context.permissions);
@@ -124,30 +114,20 @@ export async function listAssignableRoles(
     .map(({ perms: _perms, ...role }) => role);
 }
 
-/** Permissions currently held by a membership through its roles. */
-export async function membershipPermissions(
-  tx: Transaction,
-  schoolId: string,
-  membershipId: string,
-): Promise<PermissionCode[]> {
-  const rows = await tx.execute<{ code: PermissionCode }>(sql`
-    select distinct rp.permission_code as code
-    from membership_roles mr
-    join role_permissions rp on rp.role_id = mr.role_id and rp.school_id = mr.school_id
-    where mr.school_id = ${schoolId} and mr.membership_id = ${membershipId}
-  `);
-  return rows.rows.map((row) => row.code);
-}
-
 /** An actor cannot manage someone holding permissions the actor lacks. */
 export async function assertNotMorePrivileged(
   tx: Transaction,
-  context: TenantContext,
-  membershipId: string,
+  context: AccessContext,
+  userId: string,
 ): Promise<void> {
+  const rows = await tx.execute<{ code: PermissionCode }>(sql`
+    select distinct rp.permission_code as code
+    from user_roles ur
+    join role_permissions rp on rp.role_id = ur.role_id
+    where ur.user_id = ${userId}
+  `);
   const held = new Set<string>(context.permissions);
-  const theirs = await membershipPermissions(tx, context.schoolId, membershipId);
-  if (theirs.some((code) => !held.has(code))) {
+  if (rows.rows.some((row) => !held.has(row.code))) {
     throw new ForbiddenError("You cannot manage someone with more access than you.");
   }
 }

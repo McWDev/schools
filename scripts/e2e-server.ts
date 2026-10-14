@@ -8,7 +8,7 @@ import { loadEnvConfig } from "@next/env";
 import { hashPassword } from "@/server/auth/password";
 
 import { resetDatabase, rotateRuntimePassword, runMigrations, withClient } from "./lib/db-admin";
-import { SYNTHETIC_PASSWORD, SYNTHETIC_TENANTS_SQL } from "./lib/synthetic-tenants";
+import { SYNTHETIC_PASSWORD, SYNTHETIC_SCHOOL_SQL } from "./lib/synthetic-school";
 
 const E2E_PORT = 3218;
 
@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   await runMigrations(ownerUrl);
   const passwordHash = await hashPassword(SYNTHETIC_PASSWORD);
   await withClient(ownerUrl, async (client) => {
-    await client.query(SYNTHETIC_TENANTS_SQL);
+    await client.query(SYNTHETIC_SCHOOL_SQL);
     await client.query(`UPDATE users SET password_hash = $1`, [passwordHash]);
   });
   const runtimeUrl = await rotateRuntimePassword(ownerUrl);

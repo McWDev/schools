@@ -1,17 +1,20 @@
 import { eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { logoutAction, switchSchoolAction } from "@/app/(auth)/actions";
+import { logoutAction } from "@/app/(auth)/actions";
+import { Icon } from "@/components/icons";
+import { ThemeToggle } from "@/components/theme";
 import { Avatar } from "@/components/ui";
+import { listSelectableBranches } from "@/server/access/branch-filter";
 import {
-  getCurrentUserSchools,
+  getRequestAccess,
   getRequestBranch,
-  getRequestTenantContext,
+  getRequestSchool,
   requireSession,
 } from "@/server/auth/request";
 import { getDatabase } from "@/server/db/client";
 import { users } from "@/server/db/schema";
-import { listSelectableBranches } from "@/server/tenancy/branch-filter";
 
 import { AppShell, MenuButton } from "./app-shell";
 import { buildNavigation } from "./navigation";
@@ -38,102 +41,70 @@ function ShellSkeleton() {
 }
 
 const menuItem =
-  "hover:bg-surface-muted flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm";
+  "hover:bg-surface-muted flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm";
 
 async function Shell({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
   const db = getDatabase();
-  const [schools, context, branch, [me]] = await Promise.all([
-    getCurrentUserSchools(),
-    getRequestTenantContext(),
+  const [access, school, branch, [me]] = await Promise.all([
+    getRequestAccess(),
+    getRequestSchool(),
     getRequestBranch(),
     db.select({ avatarKey: users.avatarKey }).from(users).where(eq(users.id, session.userId)),
   ]);
-  const branches = context ? await listSelectableBranches(db, context) : [];
-  const school = schools.find((s) => s.schoolId === context?.schoolId);
-  const groups = buildNavigation({
-    permissions: context?.permissions ?? [],
-    hasSchool: !!context,
-    isPlatformAdmin: session.isPlatformAdmin,
-  });
+  if (!access) redirect("/login");
+  const branches = await listSelectableBranches(db, access);
+  const groups = buildNavigation(access.permissions);
+  const allLabel = access.scope.kind === "school" ? "All branches" : "All my branches";
 
   const topBar = (
     <>
-      <div className="flex min-w-0 flex-1 items-center gap-1">
-        {school &&
-          (schools.length > 1 ? (
-            <MenuButton
-              label={`School: ${school.name}. Change school`}
-              summary={
-                <span className="max-w-40 truncate font-medium sm:max-w-64">{school.name}</span>
-              }
-            >
-              <p className="text-muted px-3 pt-2 pb-1 text-xs font-semibold uppercase">
-                Switch school
-              </p>
-              {schools.map((s) => (
-                <form key={s.schoolId} action={switchSchoolAction}>
-                  <input type="hidden" name="schoolId" value={s.schoolId} />
-                  <button
-                    type="submit"
-                    className={menuItem}
-                    aria-current={s.schoolId === school.schoolId || undefined}
-                  >
-                    {s.name}
-                    {s.schoolId === school.schoolId && (
-                      <span className="text-muted text-xs">Current</span>
-                    )}
-                  </button>
-                </form>
-              ))}
-            </MenuButton>
-          ) : (
-            <span className="max-w-40 truncate px-2 text-sm font-medium sm:max-w-64">
-              {school.name}
-            </span>
-          ))}
-
-        {context && branches.length > 0 && (
-          <>
-            <span aria-hidden="true" className="text-muted">
-              /
-            </span>
-            <MenuButton
-              label={`Branch: ${branch?.name ?? "All branches"}. Change branch`}
-              summary={
-                <span className="text-muted max-w-32 truncate sm:max-w-56">
-                  {branch?.name ??
-                    (context.scope.kind === "school" ? "All branches" : "All my branches")}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        {branches.length > 0 && (
+          <MenuButton
+            label={`Branch: ${branch?.name ?? allLabel}. Change branch`}
+            summary={
+              <>
+                <span className="bg-accent-soft text-accent grid size-7 place-items-center rounded-lg">
+                  <Icon name="map-pin" />
                 </span>
-              }
-            >
-              <p className="text-muted px-3 pt-2 pb-1 text-xs font-semibold uppercase">
-                Show data for
-              </p>
-              <form action={switchBranchAction}>
-                <input type="hidden" name="branchId" value="" />
-                <button type="submit" className={menuItem} aria-current={!branch || undefined}>
-                  {context.scope.kind === "school" ? "All branches" : "All my branches"}
-                  {!branch && <span className="text-muted text-xs">Current</span>}
+                <span className="max-w-36 truncate font-medium sm:max-w-60">
+                  {branch?.name ?? allLabel}
+                </span>
+              </>
+            }
+          >
+            <p className="text-muted px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wide uppercase">
+              Show data for
+            </p>
+            <form action={switchBranchAction}>
+              <input type="hidden" name="branchId" value="" />
+              <button type="submit" className={menuItem} aria-current={!branch || undefined}>
+                <span className="font-medium">{allLabel}</span>
+                {!branch && <span className="text-primary text-xs font-semibold">Current</span>}
+              </button>
+            </form>
+            {branches.map((b) => (
+              <form key={b.id} action={switchBranchAction}>
+                <input type="hidden" name="branchId" value={b.id} />
+                <button
+                  type="submit"
+                  className={menuItem}
+                  aria-current={b.id === branch?.id || undefined}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{b.name}</span>
+                    <span className="text-muted block text-xs">
+                      {b.area ? `${b.area} · ${b.code}` : b.code}
+                    </span>
+                  </span>
+                  {b.id === branch?.id && (
+                    <span className="text-primary text-xs font-semibold">Current</span>
+                  )}
                 </button>
               </form>
-              {branches.map((b) => (
-                <form key={b.id} action={switchBranchAction}>
-                  <input type="hidden" name="branchId" value={b.id} />
-                  <button
-                    type="submit"
-                    className={menuItem}
-                    aria-current={b.id === branch?.id || undefined}
-                  >
-                    <span>
-                      {b.name} <span className="text-muted text-xs">{b.code}</span>
-                    </span>
-                    {b.id === branch?.id && <span className="text-muted text-xs">Current</span>}
-                  </button>
-                </form>
-              ))}
-            </MenuButton>
-          </>
+            ))}
+          </MenuButton>
         )}
       </div>
 
@@ -146,7 +117,7 @@ async function Shell({ children }: { children: React.ReactNode }) {
               userId={session.userId}
               name={session.displayName}
               hasPhoto={!!me?.avatarKey}
-              size={28}
+              size={30}
             />
             <span className="hidden max-w-40 truncate font-medium lg:inline">
               {session.displayName}
@@ -154,16 +125,32 @@ async function Shell({ children }: { children: React.ReactNode }) {
           </>
         }
       >
-        <div className="border-border border-b px-3 py-2">
-          <p className="truncate text-sm font-medium">{session.displayName}</p>
-          <p className="text-muted truncate text-xs">{session.email}</p>
+        <div className="border-border mb-1 flex items-center gap-3 border-b px-3 pt-2 pb-3">
+          <Avatar
+            userId={session.userId}
+            name={session.displayName}
+            hasPhoto={!!me?.avatarKey}
+            size={36}
+          />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{session.displayName}</p>
+            <p className="text-muted truncate text-xs">{session.email}</p>
+          </div>
         </div>
         <a href="/dashboard/profile" className={menuItem}>
-          My profile
+          <span className="flex items-center gap-2">
+            <Icon name="user" /> My profile
+          </span>
         </a>
-        <form action={logoutAction}>
+        <div className="flex items-center justify-between gap-2 px-3 py-2">
+          <span className="text-muted text-sm">Theme</span>
+          <ThemeToggle compact />
+        </div>
+        <form action={logoutAction} className="border-border mt-1 border-t pt-1">
           <button type="submit" className={menuItem}>
-            Sign out
+            <span className="flex items-center gap-2">
+              <Icon name="logout" /> Sign out
+            </span>
           </button>
         </form>
       </MenuButton>
@@ -171,7 +158,7 @@ async function Shell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <AppShell groups={groups} topBar={topBar}>
+    <AppShell groups={groups} schoolName={school.name} topBar={topBar}>
       {children}
     </AppShell>
   );

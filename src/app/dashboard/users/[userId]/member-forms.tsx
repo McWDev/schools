@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 
 import { FormAlert, SubmitButton, TextField } from "@/components/forms";
+import { buttonClass } from "@/components/ui";
 
 import {
   AccessFields,
@@ -26,18 +27,12 @@ function Feedback({ state }: { state: UserFormState }) {
   return null;
 }
 
-export function DetailsForm({
-  membershipId,
-  displayName,
-}: {
-  membershipId: string;
-  displayName: string;
-}) {
+export function DetailsForm({ userId, displayName }: { userId: string; displayName: string }) {
   const [state, action] = useActionState<UserFormState, FormData>(updateProfileAction, {});
   return (
     <form action={action} className="flex max-w-md flex-col gap-4" noValidate>
       <Feedback state={state} />
-      <input type="hidden" name="membershipId" value={membershipId} />
+      <input type="hidden" name="userId" value={userId} />
       <TextField
         name="displayName"
         label="Full name"
@@ -52,12 +47,12 @@ export function DetailsForm({
 }
 
 export function RolesForm({
-  membershipId,
+  userId,
   roles,
   selected,
   needsPassword,
 }: {
-  membershipId: string;
+  userId: string;
   roles: RoleOption[];
   selected: string[];
   needsPassword: boolean;
@@ -66,7 +61,7 @@ export function RolesForm({
   return (
     <form action={action} className="flex max-w-2xl flex-col gap-4" noValidate>
       <Feedback state={state} />
-      <input type="hidden" name="membershipId" value={membershipId} />
+      <input type="hidden" name="userId" value={userId} />
       <RoleFields
         roles={roles}
         selected={selected}
@@ -83,14 +78,14 @@ export function RolesForm({
 }
 
 export function AccessForm({
-  membershipId,
+  userId,
   branches,
   canGrantSchoolScope,
   scope,
   selectedBranches,
   needsPassword,
 }: {
-  membershipId: string;
+  userId: string;
   branches: BranchOption[];
   canGrantSchoolScope: boolean;
   scope: "school" | "branch";
@@ -101,7 +96,7 @@ export function AccessForm({
   return (
     <form action={action} className="flex max-w-2xl flex-col gap-4" noValidate>
       <Feedback state={state} />
-      <input type="hidden" name="membershipId" value={membershipId} />
+      <input type="hidden" name="userId" value={userId} />
       <AccessFields
         branches={branches}
         canGrantSchoolScope={canGrantSchoolScope}
@@ -120,12 +115,12 @@ export function AccessForm({
 }
 
 export function StatusForm({
-  membershipId,
+  userId,
   suspended,
   name,
   needsPassword,
 }: {
-  membershipId: string;
+  userId: string;
   suspended: boolean;
   name: string;
   needsPassword: boolean;
@@ -141,7 +136,7 @@ export function StatusForm({
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            className="border-danger/40 text-danger hover:bg-danger-surface h-10 rounded-md border px-4 text-sm font-semibold"
+            className={buttonClass("danger")}
           >
             Remove access…
           </button>
@@ -153,11 +148,11 @@ export function StatusForm({
   return (
     <form action={action} className="flex max-w-md flex-col gap-4" noValidate>
       <Feedback state={state} />
-      <input type="hidden" name="membershipId" value={membershipId} />
-      <input type="hidden" name="status" value={suspended ? "active" : "suspended"} />
+      <input type="hidden" name="userId" value={userId} />
+      <input type="hidden" name="status" value={suspended ? "active" : "deactivated"} />
       {!suspended && (
         <p className="text-sm">
-          Remove <strong>{name}</strong>&rsquo;s access to this school?
+          Remove <strong>{name}</strong>&rsquo;s access?
         </p>
       )}
       {(needsPassword || state.needsPassword) && (
@@ -171,7 +166,7 @@ export function StatusForm({
           <button
             type="button"
             onClick={() => setConfirming(false)}
-            className="border-border hover:bg-surface-muted h-10 rounded-md border px-4 text-sm font-medium"
+            className={buttonClass("secondary")}
           >
             Cancel
           </button>
@@ -181,11 +176,11 @@ export function StatusForm({
   );
 }
 
-export function ResendInvitationForm({ membershipId }: { membershipId: string }) {
+export function ResendInvitationForm({ userId }: { userId: string }) {
   const [state, action] = useActionState<UserFormState, FormData>(resendInvitationAction, {});
   return (
     <form action={action} className="flex flex-wrap items-center gap-3">
-      <input type="hidden" name="membershipId" value={membershipId} />
+      <input type="hidden" name="userId" value={userId} />
       <p className="text-muted text-sm">This person has not accepted their invitation yet.</p>
       <button type="submit" className="text-primary text-sm font-medium hover:underline">
         Send a new invitation link

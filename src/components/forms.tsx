@@ -2,6 +2,8 @@
 
 import { useFormStatus } from "react-dom";
 
+import { buttonClass } from "@/components/ui";
+
 interface TextFieldProps {
   name: string;
   label: string;
@@ -39,7 +41,7 @@ export function TextField({
         defaultValue={defaultValue}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy || undefined}
-        className="border-border bg-surface text-foreground placeholder:text-muted aria-invalid:border-danger h-10 rounded-md border px-3 text-sm shadow-xs"
+        className="border-border bg-surface text-foreground placeholder:text-subtle hover:border-border-strong focus:border-primary focus:ring-primary/20 aria-invalid:border-danger aria-invalid:focus:ring-danger/20 h-10 rounded-lg border px-3 text-sm shadow-xs transition-colors outline-none focus:ring-4"
       />
       {hint && (
         <p id={`${id}-hint`} className="text-muted text-xs">
@@ -68,7 +70,7 @@ export function SubmitButton({
       type="submit"
       disabled={pending}
       aria-disabled={pending}
-      className="bg-primary text-primary-foreground hover:bg-primary-hover inline-flex h-10 items-center justify-center rounded-md px-4 text-sm font-semibold transition-colors disabled:cursor-wait disabled:opacity-70"
+      className={buttonClass("primary")}
     >
       {pending ? pendingLabel : children}
     </button>
@@ -83,7 +85,7 @@ export function FormAlert({ tone, children }: { tone: "error" | "success"; child
   return (
     <div
       role={tone === "error" ? "alert" : "status"}
-      className={`rounded-md border px-3 py-2 text-sm ${styles}`}
+      className={`rounded-lg border px-3 py-2.5 text-sm ${styles}`}
     >
       <span className="font-semibold">{tone === "error" ? "Error: " : "Done: "}</span>
       {children}

@@ -2,17 +2,16 @@ import { createHash } from "node:crypto";
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { SYNTHETIC as t } from "../../scripts/lib/synthetic-tenants";
+import { SYNTHETIC as t } from "../../scripts/lib/synthetic-school";
 import { AuthValidationError } from "@/server/auth/errors";
 import { login } from "@/server/auth/login";
 import { hashPassword } from "@/server/auth/password";
 import { requestPasswordReset, resetPassword } from "@/server/auth/password-reset";
-import { revokeSessionByToken, switchSessionSchool, validateSession } from "@/server/auth/sessions";
+import { revokeSessionByToken, setSessionBranch, validateSession } from "@/server/auth/sessions";
 import { getDatabase } from "@/server/db/client";
 import { MemoryMailer } from "@/server/email/mailer";
-import { listUserSchools } from "@/server/tenancy/memberships";
 
-import { closeOwner, ownerQuery, resetTenants } from "./helpers";
+import { closeOwner, ownerQuery, resetSchool } from "./helpers";
 
 const db = getDatabase();
 const PASSWORD = "correct horse battery staple";
@@ -28,13 +27,13 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await resetTenants();
+  await resetSchool();
   await ownerQuery(`update users set password_hash = $1`, [passwordHash]);
 });
 
 afterAll(closeOwner);
 
-async function signIn(email = "admin.a@example.test", password = PASSWORD, ip = nextIp()) {
+async function signIn(email = "admin@example.test", password = PASSWORD, ip = nextIp()) {
   return login(db, { email, password, ip, userAgent: "vitest" });
 }
 
@@ -54,15 +53,15 @@ describe("login", () => {
   it("signs in with valid credentials and creates a validated session", async () => {
     const token = await signInToken();
     const session = await validateSession(db, token);
-    expect(session).toMatchObject({ userId: t.users.adminA, email: "admin.a@example.test" });
+    expect(session).toMatchObject({ userId: t.users.admin, email: "admin@example.test" });
   });
 
   it("normalizes email case and surrounding spaces", async () => {
-    expect((await signIn("  ADMIN.A@Example.TEST ")).ok).toBe(true);
+    expect((await signIn("  ADMIN@Example.TEST ")).ok).toBe(true);
   });
 
   it("returns the same generic failure for wrong password and unknown email", async () => {
-    expect(await signIn("admin.a@example.test", "wrong password!!")).toEqual({
+    expect(await signIn("admin@example.test", "wrong password!!")).toEqual({
       ok: false,
       reason: "invalid_credentials",
     });
@@ -73,20 +72,22 @@ describe("login", () => {
   });
 
   it("rejects users without a password yet (e.g. invited, not set up)", async () => {
-    await ownerQuery(`update users set password_hash = null where id = $1`, [t.users.adminA]);
+    await ownerQuery(`update users set password_hash = null where id = $1`, [t.users.admin]);
     expect((await signIn()).ok).toBe(false);
   });
 
   it("rejects suspended and deactivated accounts with the generic failure", async () => {
-    await ownerQuery(`update users set status = 'suspended' where id = $1`, [t.users.adminA]);
+    await ownerQuery(`update users set status = 'suspended' where id = $1`, [t.users.admin]);
     expect(await signIn()).toEqual({ ok: false, reason: "invalid_credentials" });
-    await ownerQuery(`update users set status = 'deactivated' where id = $1`, [t.users.adminB]);
-    expect((await signIn("admin.b@example.test")).ok).toBe(false);
+    await ownerQuery(`update users set status = 'deactivated' where id = $1`, [
+      t.users.mainTeacher,
+    ]);
+    expect((await signIn("main.teacher@example.test")).ok).toBe(false);
   });
 
   it("records success and failure audit events without secrets", async () => {
     const token = await signInToken();
-    await signIn("admin.a@example.test", "wrong password!!");
+    await signIn("admin@example.test", "wrong password!!");
     const events = await ownerQuery<{ action: string; outcome: string; metadata: unknown }>(
       `select action, outcome, metadata from audit_events order by occurred_at`,
     );
@@ -131,7 +132,7 @@ describe("sessions", () => {
   it("suspending a user ends their existing sessions on the next request", async () => {
     const token = await signInToken();
     expect(await validateSession(db, token)).not.toBeNull();
-    await ownerQuery(`update users set status = 'suspended' where id = $1`, [t.users.adminA]);
+    await ownerQuery(`update users set status = 'suspended' where id = $1`, [t.users.admin]);
     expect(await validateSession(db, token)).toBeNull();
   });
 
@@ -141,32 +142,22 @@ describe("sessions", () => {
     }
   });
 
-  it("rotates the token when switching school; the old token stops working", async () => {
-    const oldToken = await signInToken("multi@example.test");
-    const session = await validateSession(db, oldToken);
-    const newToken = await switchSessionSchool(db, session!.sessionId, t.schoolB.id);
-    expect(await validateSession(db, oldToken)).toBeNull();
-    expect(await validateSession(db, newToken)).toMatchObject({ activeSchoolId: t.schoolB.id });
-  });
-
-  it("school list contains only the user's own active schools", async () => {
-    expect((await listUserSchools(db, t.users.adminA)).map((s) => s.schoolId)).toEqual([
-      t.schoolA.id,
-    ]);
-    expect((await listUserSchools(db, t.users.multiSchool)).map((s) => s.schoolId).sort()).toEqual(
-      [t.schoolA.id, t.schoolB.id].sort(),
-    );
-    await ownerQuery(`update schools set status = 'suspended' where id = $1`, [t.schoolB.id]);
-    expect((await listUserSchools(db, t.users.multiSchool)).map((s) => s.schoolId)).toEqual([
-      t.schoolA.id,
-    ]);
+  it("stores a branch filter on the session and clears it if the branch is removed", async () => {
+    const token = await signInToken();
+    const session = await validateSession(db, token);
+    await setSessionBranch(db, session!.sessionId, t.branches.north);
+    expect(await validateSession(db, token)).toMatchObject({ activeBranchId: t.branches.north });
+    // Assigned staff block deleting a branch (history is preserved), so clear them first.
+    await ownerQuery(`delete from user_branches where branch_id = $1`, [t.branches.north]);
+    await ownerQuery(`delete from branches where id = $1`, [t.branches.north]);
+    expect(await validateSession(db, token)).toMatchObject({ activeBranchId: null });
   });
 });
 
 describe("rate limiting", () => {
   it("blocks the 6th attempt for one email within the window, even with the right password", async () => {
     for (let i = 0; i < 5; i += 1) {
-      expect(await signIn("admin.a@example.test", "wrong password!!")).toMatchObject({
+      expect(await signIn("admin@example.test", "wrong password!!")).toMatchObject({
         reason: "invalid_credentials",
       });
     }
@@ -182,21 +173,21 @@ describe("rate limiting", () => {
     for (let i = 0; i < 20; i += 1) {
       await signIn(`unknown${i}@example.test`, "wrong password!!", ip);
     }
-    expect(await signIn("admin.a@example.test", PASSWORD, ip)).toMatchObject({
+    expect(await signIn("admin@example.test", PASSWORD, ip)).toMatchObject({
       reason: "rate_limited",
     });
-    expect((await signIn("admin.a@example.test", PASSWORD, nextIp())).ok).toBe(true);
+    expect((await signIn("admin@example.test", PASSWORD, nextIp())).ok).toBe(true);
   });
 
   it("a successful login clears the per-email failure counter", async () => {
-    for (let i = 0; i < 4; i += 1) await signIn("admin.a@example.test", "wrong password!!");
+    for (let i = 0; i < 4; i += 1) await signIn("admin@example.test", "wrong password!!");
     expect((await signIn()).ok).toBe(true);
-    for (let i = 0; i < 4; i += 1) await signIn("admin.a@example.test", "wrong password!!");
+    for (let i = 0; i < 4; i += 1) await signIn("admin@example.test", "wrong password!!");
     expect((await signIn()).ok).toBe(true);
   });
 
   it("stores rate-limit keys hashed, never as raw email or IP", async () => {
-    await signIn("admin.a@example.test", "wrong password!!", "203.0.113.7");
+    await signIn("admin@example.test", "wrong password!!", "203.0.113.7");
     const rows = await ownerQuery<{ key: string }>(`select key from auth_rate_limits`);
     expect(rows.length).toBeGreaterThan(0);
     for (const { key } of rows) {
@@ -211,14 +202,14 @@ describe("password reset", () => {
     await expect(
       requestPasswordReset(db, mailer, { email: "nobody@example.test", ip: nextIp(), appUrl }),
     ).resolves.toBeUndefined();
-    await ownerQuery(`update users set status = 'suspended' where id = $1`, [t.users.adminA]);
-    await requestPasswordReset(db, mailer, { email: "admin.a@example.test", ip: nextIp(), appUrl });
+    await ownerQuery(`update users set status = 'suspended' where id = $1`, [t.users.admin]);
+    await requestPasswordReset(db, mailer, { email: "admin@example.test", ip: nextIp(), appUrl });
     expect(mailer.sent).toHaveLength(0);
   });
 
   it("emails a fragment link and stores only the token hash", async () => {
     const mailer = new MemoryMailer();
-    await requestPasswordReset(db, mailer, { email: "admin.a@example.test", ip: nextIp(), appUrl });
+    await requestPasswordReset(db, mailer, { email: "admin@example.test", ip: nextIp(), appUrl });
     expect(mailer.sent).toHaveLength(1);
     expect(mailer.sent[0].text).toContain(`${appUrl}/reset-password#token=`);
     const token = tokenFromEmail(mailer);
@@ -231,16 +222,16 @@ describe("password reset", () => {
   it("resets the password, revokes all sessions, and is single-use", async () => {
     const existing = await signInToken();
     const mailer = new MemoryMailer();
-    await requestPasswordReset(db, mailer, { email: "admin.a@example.test", ip: nextIp(), appUrl });
+    await requestPasswordReset(db, mailer, { email: "admin@example.test", ip: nextIp(), appUrl });
     const token = tokenFromEmail(mailer);
 
     expect(await resetPassword(db, { token, newPassword: NEW_PASSWORD, ip: nextIp() })).toEqual({
       ok: true,
-      userId: t.users.adminA,
+      userId: t.users.admin,
     });
     expect(await validateSession(db, existing)).toBeNull();
-    expect((await signIn("admin.a@example.test", PASSWORD)).ok).toBe(false);
-    expect((await signIn("admin.a@example.test", NEW_PASSWORD)).ok).toBe(true);
+    expect((await signIn("admin@example.test", PASSWORD)).ok).toBe(false);
+    expect((await signIn("admin@example.test", NEW_PASSWORD)).ok).toBe(true);
 
     // Replay of the same token fails.
     expect(
@@ -253,7 +244,7 @@ describe("password reset", () => {
 
   it("is single-use even when two submissions race", async () => {
     const mailer = new MemoryMailer();
-    await requestPasswordReset(db, mailer, { email: "admin.a@example.test", ip: nextIp(), appUrl });
+    await requestPasswordReset(db, mailer, { email: "admin@example.test", ip: nextIp(), appUrl });
     const token = tokenFromEmail(mailer);
     const results = await Promise.all([
       resetPassword(db, { token, newPassword: "first racing passphrase", ip: nextIp() }),
@@ -264,7 +255,7 @@ describe("password reset", () => {
 
   it("rejects expired tokens", async () => {
     const mailer = new MemoryMailer();
-    await requestPasswordReset(db, mailer, { email: "admin.a@example.test", ip: nextIp(), appUrl });
+    await requestPasswordReset(db, mailer, { email: "admin@example.test", ip: nextIp(), appUrl });
     await ownerQuery(`update password_reset_tokens set expires_at = now() - interval '1 second'`);
     expect(
       await resetPassword(db, {
@@ -277,9 +268,9 @@ describe("password reset", () => {
 
   it("a newer reset request invalidates the previous link", async () => {
     const mailer = new MemoryMailer();
-    await requestPasswordReset(db, mailer, { email: "admin.a@example.test", ip: nextIp(), appUrl });
+    await requestPasswordReset(db, mailer, { email: "admin@example.test", ip: nextIp(), appUrl });
     const first = tokenFromEmail(mailer);
-    await requestPasswordReset(db, mailer, { email: "admin.a@example.test", ip: nextIp(), appUrl });
+    await requestPasswordReset(db, mailer, { email: "admin@example.test", ip: nextIp(), appUrl });
     const second = tokenFromEmail(mailer);
     expect(
       (await resetPassword(db, { token: first, newPassword: NEW_PASSWORD, ip: nextIp() })).ok,
@@ -291,7 +282,7 @@ describe("password reset", () => {
 
   it("enforces the password policy without consuming the token", async () => {
     const mailer = new MemoryMailer();
-    await requestPasswordReset(db, mailer, { email: "admin.a@example.test", ip: nextIp(), appUrl });
+    await requestPasswordReset(db, mailer, { email: "admin@example.test", ip: nextIp(), appUrl });
     const token = tokenFromEmail(mailer);
     await expect(resetPassword(db, { token, newPassword: "short", ip: nextIp() })).rejects.toThrow(
       AuthValidationError,
@@ -305,7 +296,7 @@ describe("password reset", () => {
     const mailer = new MemoryMailer();
     for (let i = 0; i < 4; i += 1) {
       await requestPasswordReset(db, mailer, {
-        email: "admin.a@example.test",
+        email: "admin@example.test",
         ip: nextIp(),
         appUrl,
       });

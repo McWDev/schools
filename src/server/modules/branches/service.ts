@@ -3,22 +3,23 @@ import "server-only";
 import { and, asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "@/server/db/client";
-import { branches } from "@/server/db/schema";
-import { recordAudit } from "@/server/modules/audit/record";
 import {
   canAccessBranch,
   requirePermission,
-  withTenant,
-  type TenantContext,
-} from "@/server/tenancy/context";
-import { ForbiddenError } from "@/server/tenancy/errors";
+  withAccess,
+  type AccessContext,
+} from "@/server/access/context";
+import { ForbiddenError } from "@/server/access/errors";
+import type { Database } from "@/server/db/client";
+import { branches } from "@/server/db/schema";
+import { recordAudit } from "@/server/modules/audit/record";
 
 export interface BranchView {
   id: string;
   name: string;
   code: string;
   status: "active" | "inactive";
+  area: string | null;
   address: string | null;
   phone: string | null;
   email: string | null;
@@ -29,13 +30,14 @@ const columns = {
   name: branches.name,
   code: branches.code,
   status: branches.status,
+  area: branches.area,
   address: branches.address,
   phone: branches.phone,
   email: branches.email,
 };
 
-// .strict() rejects unknown keys, so a forged school_id/schoolId in the payload is an error
-// rather than being silently accepted. The school always comes from the server-side context.
+// .strict() rejects unknown keys (e.g. a forged "status" or "id"), so they fail loudly instead
+// of being silently accepted.
 export const createBranchInput = z
   .object({
     name: z.string().trim().min(2).max(120),
@@ -44,6 +46,7 @@ export const createBranchInput = z
       .trim()
       .toUpperCase()
       .regex(/^[A-Z0-9-]{2,20}$/, "Use 2–20 letters, numbers, or dashes"),
+    area: z.string().trim().max(120).optional(),
     address: z.string().trim().max(300).optional(),
     phone: z.string().trim().max(40).optional(),
     email: z.string().trim().toLowerCase().email().optional(),
@@ -52,22 +55,22 @@ export const createBranchInput = z
 
 export const updateBranchInput = createBranchInput.partial().strict();
 
-function scopeFilter(context: TenantContext): SQL | undefined {
-  const school = eq(branches.schoolId, context.schoolId);
-  if (context.scope.kind === "school") return school;
-  if (context.scope.branchIds.length === 0) return and(school, sql`false`);
-  return and(school, inArray(branches.id, [...context.scope.branchIds]));
+/** Branches inside the caller's scope: all of them, or only assigned branches. */
+function scopeFilter(context: AccessContext): SQL | undefined {
+  if (context.scope.kind === "school") return undefined;
+  if (context.scope.branchIds.length === 0) return sql`false`;
+  return inArray(branches.id, [...context.scope.branchIds]);
 }
 
 export async function listBranches(
   db: Database,
-  context: TenantContext,
+  context: AccessContext,
   page: { limit?: number; offset?: number } = {},
 ): Promise<BranchView[]> {
   requirePermission(context, "branches.read");
   const limit = Math.min(Math.max(page.limit ?? 50, 1), 100);
   const offset = Math.max(page.offset ?? 0, 0);
-  return withTenant(db, context, (tx) =>
+  return withAccess(db, context, (tx) =>
     tx
       .select(columns)
       .from(branches)
@@ -81,12 +84,12 @@ export async function listBranches(
 /** Returns null for branches outside the caller's scope — indistinguishable from "not found". */
 export async function getBranch(
   db: Database,
-  context: TenantContext,
+  context: AccessContext,
   branchId: string,
 ): Promise<BranchView | null> {
   requirePermission(context, "branches.read");
   if (!z.uuid().safeParse(branchId).success) return null;
-  return withTenant(db, context, async (tx) => {
+  return withAccess(db, context, async (tx) => {
     const [row] = await tx
       .select(columns)
       .from(branches)
@@ -98,19 +101,17 @@ export async function getBranch(
 
 export async function createBranch(
   db: Database,
-  context: TenantContext,
+  context: AccessContext,
   input: unknown,
 ): Promise<BranchView> {
   requirePermission(context, "branches.manage");
-  // Creating a branch is a school-level action, even for a branch admin holding the permission.
+  // Opening a branch is a school-level action, even for a branch admin holding the permission.
   if (context.scope.kind !== "school") throw new ForbiddenError();
   const data = createBranchInput.parse(input);
-  return withTenant(db, context, async (tx) => {
-    const [row] = await tx
-      .insert(branches)
-      .values({ ...data, schoolId: context.schoolId })
-      .returning(columns);
-    await recordAudit(tx, context, {
+  return withAccess(db, context, async (tx) => {
+    const [row] = await tx.insert(branches).values(data).returning(columns);
+    await recordAudit(tx, {
+      actorUserId: context.userId,
       action: "branch.create",
       targetType: "branch",
       targetId: row.id,
@@ -123,21 +124,22 @@ export async function createBranch(
 
 export async function updateBranch(
   db: Database,
-  context: TenantContext,
+  context: AccessContext,
   branchId: string,
   input: unknown,
 ): Promise<BranchView | null> {
   if (!z.uuid().safeParse(branchId).success || !canAccessBranch(context, branchId)) return null;
   requirePermission(context, "branches.manage");
   const data = updateBranchInput.parse(input);
-  return withTenant(db, context, async (tx) => {
+  return withAccess(db, context, async (tx) => {
     const [row] = await tx
       .update(branches)
       .set(data)
       .where(and(scopeFilter(context), eq(branches.id, branchId)))
       .returning(columns);
     if (!row) return null;
-    await recordAudit(tx, context, {
+    await recordAudit(tx, {
+      actorUserId: context.userId,
       action: "branch.update",
       targetType: "branch",
       targetId: row.id,

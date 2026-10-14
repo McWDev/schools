@@ -5,7 +5,7 @@
 - Enforce authorization on the server for every request.
 - Treat all browser input as untrusted.
 - Separate authentication (who you are) from authorization (what you can do).
-- Protect tenant boundaries as a top-priority requirement.
+- Protect branch boundaries and role permissions as a top-priority requirement.
 - Log sensitive administrative events without logging secrets or unnecessary personal data.
 
 ## 2. Authentication and sessions
@@ -16,16 +16,16 @@
 - Rotate session identifiers after login and privilege changes; revoke sessions after password reset, account suspension, or role removal where feasible.
 - Password-reset tokens must be random, hashed at rest, short-lived, single-use, and not reveal whether an email/account exists.
 - Require re-authentication for high-risk actions.
-- Enforce MFA for platform super admins; strongly recommend MFA for school owners and finance approvers.
+- Enforce MFA for school administrators before production; strongly recommend MFA for finance approvers.
 - Never place access tokens, passwords, or session secrets in URLs or logs.
 
-## 3. Authorization and tenant isolation
-- Check tenant membership and permissions for each read and write.
+## 3. Authorization and branch isolation
+- Check the user's active status, branch scope, and permissions for each read and write.
 - Scope database queries before retrieving rows; do not fetch a row globally and rely on the UI to hide it.
-- Validate both `school_id` and `branch_id` relationships.
+- Validate every `branch_id` against the user's scope.
 - Prevent insecure direct object reference (IDOR) attacks by testing guessed and modified IDs.
-- Ensure background jobs, scheduled reports, exports, file downloads, and notifications use the same tenant authorization rules.
-- Use deny-by-default handling when tenant context is missing or invalid.
+- Ensure background jobs, scheduled reports, exports, file downloads, and notifications use the same authorization rules.
+- Use deny-by-default handling when the access context is missing or invalid.
 - Audit permission changes and privileged support access.
 
 ## 4. Input and application security
@@ -61,18 +61,18 @@ Record at minimum:
 - User invitation, activation, deactivation, and role/permission changes.
 - School and branch creation, suspension, and configuration changes.
 - Student record changes, attendance corrections, marks approvals/changes, finance transactions, exports, and exceptional support access.
-Each event should include actor, action, timestamp, tenant, relevant record reference, outcome, and safe metadata. Do not record passwords, reset tokens, session cookies, full payment credentials, or unnecessary sensitive content.
+Each event should include actor, action, timestamp, branch where relevant, record reference, outcome, and safe metadata. Do not record passwords, reset tokens, session cookies, full payment credentials, or unnecessary sensitive content.
 Audit logs should be append-only to ordinary application roles. Restrict access and define retention.
 
 ## 8. Privacy and data governance
 - Define data retention, deletion, export, consent, and breach-response policies for the countries where the product operates.
 - Collect only data needed for school operations.
 - Restrict student and guardian information to authorized roles.
-- Document how account closure, student graduation, and tenant closure affect data.
+- Document how account closure, student graduation, and branch closure affect data.
 - Backups must be protected with access controls and encryption provided by the storage platform.
 
 ## 9. Security verification checklist
-- Cross-school read/write tests for every tenant-owned resource.
+- Cross-branch read/write tests for every branch-scoped resource.
 - Cross-branch access tests for branch-limited users.
 - Role escalation and forged payload tests.
 - Session revocation tests.

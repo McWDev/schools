@@ -34,3 +34,21 @@ A modern, professional school administration product: clean structure, calm neut
 - Form errors identify the field and explain the correction.
 - Dashboard cards and navigation reflect actual permissions and scoped data.
 - All interactive controls have clear names and visible focus states.
+
+## Design system (implemented)
+- **Tokens** live in `src/app/globals.css`:
+  - surfaces, borders, text (foreground / muted / subtle)
+  - primary (indigo) and accent (teal)
+  - status colors (success / warning / danger with matching surfaces)
+  - the navy sidebar and the hero gradient
+- **Themes:** Light, Dark, and System.
+  - The choice is stored per browser (`localStorage.theme`).
+  - An inline script in `<head>` applies it before the first paint, so there is no flash.
+  - Without JavaScript, the operating-system preference is used.
+  - Both themes must pass axe WCAG AA checks.
+- **Shared components:**
+  - `src/components/ui.tsx`: `buttonClass`, `PageHeader`, `Card`, `StatCard`, `Badge`, `Avatar`, `NoAccess`
+  - `src/components/forms.tsx`: `TextField`, `SubmitButton`, `FormAlert`
+  - `src/components/theme.tsx`: `ThemeToggle`, `THEME_SCRIPT`
+- **Layout:** a navy sidebar with grouped navigation; a translucent sticky top bar with the branch selector and account menu; a hero banner on the dashboard; and a split-screen sign-in page with the school name.
+- **Reduced motion** is respected (`prefers-reduced-motion`).

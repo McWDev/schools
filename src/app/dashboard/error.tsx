@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 
+import { buttonClass } from "@/components/ui";
+
 // Error boundary for signed-in pages. Shows a generic message; details stay in server logs.
 export default function DashboardError({
   error,
@@ -20,11 +22,7 @@ export default function DashboardError({
         We could not load this page. Your data has not been changed. Try again, and contact support
         if the problem continues{error.digest ? ` (reference ${error.digest})` : ""}.
       </p>
-      <button
-        type="button"
-        onClick={reset}
-        className="bg-primary text-primary-foreground hover:bg-primary-hover mt-4 h-9 rounded-md px-3 text-sm font-semibold"
-      >
+      <button type="button" onClick={reset} className={`mt-4 ${buttonClass("primary")}`}>
         Try again
       </button>
     </div>

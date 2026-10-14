@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { SYNTHETIC_PASSWORD } from "../../scripts/lib/synthetic-tenants";
+import { SYNTHETIC_PASSWORD } from "../../scripts/lib/synthetic-school";
 
 import { alert, attemptSignIn, latestEmailLink, resetData, signIn, signOut } from "./helpers";
 
@@ -33,26 +33,26 @@ test.describe("protected routes", () => {
 
 test.describe("sign in and out", () => {
   test("shows a generic error for wrong credentials", async ({ page }) => {
-    await attemptSignIn(page, "admin.a@example.test", "definitely the wrong password");
+    await attemptSignIn(page, "admin@example.test", "definitely the wrong password");
     await expect(alert(page, "The email or password is incorrect.")).toBeVisible();
     await expect(page).toHaveURL(/\/login$/);
     // The email is kept so the user only re-types the password; the password is never echoed.
-    await expect(page.getByLabel("Email address")).toHaveValue("admin.a@example.test");
+    await expect(page.getByLabel("Email address")).toHaveValue("admin@example.test");
     await expect(page.getByLabel("Password", { exact: true })).toHaveValue("");
   });
 
   test("signs in, shows the dashboard, then signs out", async ({ page, context }) => {
-    await signIn(page, "admin.a@example.test", SYNTHETIC_PASSWORD);
+    await signIn(page, "admin@example.test", SYNTHETIC_PASSWORD);
     await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(page.getByRole("heading", { name: "Welcome, Admin A" })).toBeVisible();
-    await expect(page.getByText("Current school: Example Academy A")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome, School Admin" })).toBeVisible();
+    await expect(page.getByText("Example Academy · All branches")).toBeVisible();
 
     const cookie = (await context.cookies()).find((c) => c.name === "session");
     expect(cookie).toMatchObject({ httpOnly: true, sameSite: "Lax", path: "/" });
 
     const me = await page.request.get("/api/me");
     expect(me.status()).toBe(200);
-    expect(await me.json()).toMatchObject({ user: { displayName: "Admin A" } });
+    expect(await me.json()).toMatchObject({ user: { displayName: "School Admin" } });
 
     await signOut(page);
     // The revoked session no longer works even if the old cookie were replayed.
@@ -61,27 +61,16 @@ test.describe("sign in and out", () => {
     });
     expect(replay.status()).toBe(401);
   });
-
-  test("multi-school users choose a school explicitly", async ({ page }) => {
-    await signIn(page, "multi@example.test", SYNTHETIC_PASSWORD);
-    await expect(page.getByText("No school selected")).toBeVisible();
-    await page
-      .getByRole("listitem")
-      .filter({ hasText: "Example Academy B" })
-      .getByRole("button", { name: "Switch to this school" })
-      .click();
-    await expect(page.getByText("Current school: Example Academy B")).toBeVisible();
-  });
 });
 
 test.describe("password reset", () => {
   test("resets the password through the emailed link", async ({ page }) => {
     await page.goto("/forgot-password");
-    await page.getByLabel("Email address").fill("teacher.a1@example.test");
+    await page.getByLabel("Email address").fill("main.teacher@example.test");
     await page.getByRole("button", { name: "Send reset link" }).click();
     await expect(page.getByRole("status")).toContainText("If an account exists for that email");
 
-    const link = await latestEmailLink("/reset-password", "teacher.a1@example.test");
+    const link = await latestEmailLink("/reset-password", "main.teacher@example.test");
     await page.goto(link);
     // The token is removed from the address bar as soon as the page reads it.
     await expect(page).toHaveURL(/\/reset-password$/);
@@ -91,8 +80,8 @@ test.describe("password reset", () => {
 
     await expect(page).toHaveURL(/\/login\?reset=1$/);
     await expect(page.getByRole("status")).toContainText("Your password was changed");
-    await signIn(page, "teacher.a1@example.test", "teacher picked a new passphrase");
-    await expect(page.getByRole("heading", { name: "Welcome, Teacher A1" })).toBeVisible();
+    await signIn(page, "main.teacher@example.test", "teacher picked a new passphrase");
+    await expect(page.getByRole("heading", { name: "Welcome, Main Teacher" })).toBeVisible();
 
     // Replaying the same link fails.
     await page.goto(link);

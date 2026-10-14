@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { SYNTHETIC as t } from "../../scripts/lib/synthetic-tenants";
+import { SYNTHETIC as t } from "../../scripts/lib/synthetic-school";
+import { resolveAccessContext, type AccessContext } from "@/server/access/context";
+import { AccessDeniedError, ForbiddenError } from "@/server/access/errors";
+import { PERMISSIONS } from "@/server/access/permissions";
 import { acceptInvitation } from "@/server/auth/invitations";
 import { login } from "@/server/auth/login";
 import { hashPassword } from "@/server/auth/password";
@@ -9,20 +12,17 @@ import { validateSession } from "@/server/auth/sessions";
 import { getDatabase } from "@/server/db/client";
 import { MemoryMailer } from "@/server/email/mailer";
 import {
-  getMember,
+  getStaff,
   getVisibleAvatarKey,
-  inviteMember,
-  listMembers,
-  setMemberAccess,
-  setMemberRoles,
-  setMemberStatus,
-  updateMemberProfile,
+  inviteStaff,
+  listStaff,
+  setStaffAccess,
+  setStaffRoles,
+  setStaffStatus,
+  updateStaffProfile,
 } from "@/server/modules/users/service";
-import { resolveTenantContext, type TenantContext } from "@/server/tenancy/context";
-import { ForbiddenError, TenantAccessError } from "@/server/tenancy/errors";
-import { PERMISSIONS } from "@/server/tenancy/permissions";
 
-import { closeOwner, ownerQuery, resetTenants } from "./helpers";
+import { closeOwner, ownerQuery, resetSchool } from "./helpers";
 
 const db = getDatabase();
 const PASSWORD = "password1234";
@@ -31,29 +31,24 @@ let passwordHash: string;
 let ipCounter = 0;
 const nextIp = () => `192.0.2.${++ipCounter}`;
 
-let adminA: TenantContext;
-let branchAdminA1: TenantContext;
-let teacherA1: TenantContext;
-let adminB: TenantContext;
+let admin: AccessContext;
+let mainBranchAdmin: AccessContext;
+let mainTeacher: AccessContext;
 let roleIds: Record<string, string>;
 
-const ctx = (userId: string, schoolId: string) => resolveTenantContext(db, { userId, schoolId });
+const resolve = (userId: string) => resolveAccessContext(db, userId);
 
 beforeAll(async () => {
   passwordHash = await hashPassword(PASSWORD);
 });
 
 beforeEach(async () => {
-  await resetTenants();
+  await resetSchool();
   await ownerQuery(`update users set password_hash = $1`, [passwordHash]);
-  adminA = await ctx(t.users.adminA, t.schoolA.id);
-  branchAdminA1 = await ctx(t.users.branchAdminA1, t.schoolA.id);
-  teacherA1 = await ctx(t.users.teacherA1, t.schoolA.id);
-  adminB = await ctx(t.users.adminB, t.schoolB.id);
-  const rows = await ownerQuery<{ key: string; id: string }>(
-    `select key, id from roles where school_id = $1`,
-    [t.schoolA.id],
+  [admin, mainBranchAdmin, mainTeacher] = await Promise.all(
+    [t.users.admin, t.users.mainBranchAdmin, t.users.mainTeacher].map(resolve),
   );
+  const rows = await ownerQuery<{ key: string; id: string }>(`select key, id from roles`);
   roleIds = Object.fromEntries(rows.map((r) => [r.key, r.id]));
 });
 
@@ -65,19 +60,19 @@ function tokenFrom(mailer: MemoryMailer): string {
   return match[1];
 }
 
-const inviteTeacherToA1 = (
-  actor: TenantContext,
+const inviteMainTeacher = (
+  actor: AccessContext,
   mailer = new MemoryMailer(),
   email = "new.teacher@example.test",
 ) =>
-  inviteMember(
+  inviteStaff(
     db,
     actor,
     mailer,
     {
       email,
       displayName: "New Teacher",
-      access: { scope: "branch", branchIds: [t.schoolA.branchA1] },
+      access: { scope: "branch", branchIds: [t.branches.main] },
       roleIds: [roleIds.teacher],
     },
     appUrl,
@@ -89,146 +84,140 @@ describe("permissions", () => {
     expect(rows.map((r) => r.code)).toEqual([...PERMISSIONS].sort());
   });
 
-  it("every school gets the system roles automatically", async () => {
-    const rows = await ownerQuery<{ school_id: string; n: number }>(
-      `select school_id, count(*)::int as n from roles group by school_id order by school_id`,
-    );
-    expect(rows).toEqual([
-      { school_id: t.schoolA.id, n: 6 },
-      { school_id: t.schoolB.id, n: 6 },
+  it("installs the six system roles once", async () => {
+    const rows = await ownerQuery<{ key: string }>(`select key from roles order by key`);
+    expect(rows.map((r) => r.key)).toEqual([
+      "auditor",
+      "branch_admin",
+      "finance_officer",
+      "registrar",
+      "school_admin",
+      "teacher",
     ]);
   });
 
   it("resolves permissions from roles into the server-side context", () => {
-    expect(adminA.permissions).toContain("users.assign_roles");
-    expect(adminA.permissions).toContain("school.settings.manage");
-    expect(branchAdminA1.permissions).toContain("users.invite");
-    expect(branchAdminA1.permissions).not.toContain("school.settings.manage");
-    expect(teacherA1.permissions).toEqual(["branches.read"]);
+    expect(admin.permissions).toContain("users.assign_roles");
+    expect(admin.permissions).toContain("school.settings.manage");
+    expect(mainBranchAdmin.permissions).toContain("users.invite");
+    expect(mainBranchAdmin.permissions).not.toContain("school.settings.manage");
+    expect(mainTeacher.permissions).toEqual(["branches.read"]);
   });
 
-  it("a teacher cannot list or manage users", async () => {
-    await expect(listMembers(db, teacherA1)).rejects.toThrow(ForbiddenError);
-    await expect(inviteTeacherToA1(teacherA1)).rejects.toThrow(ForbiddenError);
+  it("a teacher cannot list or manage staff", async () => {
+    await expect(listStaff(db, mainTeacher)).rejects.toThrow(ForbiddenError);
+    await expect(inviteMainTeacher(mainTeacher)).rejects.toThrow(ForbiddenError);
   });
 });
 
 describe("listing and viewing", () => {
-  it("school admin sees every member of their school and nobody from another school", async () => {
-    const { items, total } = await listMembers(db, adminA);
+  it("school admin sees every staff member", async () => {
+    const { items, total } = await listStaff(db, admin);
     expect(total).toBe(4);
     expect(items.map((m) => m.email).sort()).toEqual([
-      "admin.a@example.test",
-      "branch.admin.a1@example.test",
-      "multi@example.test",
-      "teacher.a1@example.test",
+      "admin@example.test",
+      "main.admin@example.test",
+      "main.teacher@example.test",
+      "north.teacher@example.test",
     ]);
   });
 
-  it("branch admin sees only branch-scoped members inside their branches", async () => {
-    const { items } = await listMembers(db, branchAdminA1);
+  it("branch admin sees only branch staff inside their branches", async () => {
+    const { items } = await listStaff(db, mainBranchAdmin);
     expect(items.map((m) => m.email).sort()).toEqual([
-      "branch.admin.a1@example.test",
-      "teacher.a1@example.test",
+      "main.admin@example.test",
+      "main.teacher@example.test",
     ]);
   });
 
   it("searches name and email, treating wildcards literally, with pagination", async () => {
-    expect((await listMembers(db, adminA, { search: "teacher" })).items).toHaveLength(1);
-    expect((await listMembers(db, adminA, { search: "%" })).items).toHaveLength(0);
-    const page = await listMembers(db, adminA, { pageSize: 2, page: 2 });
-    expect(page).toMatchObject({ total: 4, page: 2, pageSize: 2 });
-    expect(page.items).toHaveLength(2);
+    expect((await listStaff(db, admin, { search: "north" })).items).toHaveLength(1);
+    expect((await listStaff(db, admin, { search: "%" })).items).toHaveLength(0);
+    const page = await listStaff(db, admin, { pageSize: 3, page: 2 });
+    expect(page).toMatchObject({ total: 4, page: 2, pageSize: 3 });
+    expect(page.items).toHaveLength(1);
   });
 
-  it("a guessed membership ID from another school returns not found", async () => {
-    expect(await getMember(db, adminA, t.memberships.adminB)).toBeNull();
-    expect(await getMember(db, adminB, t.memberships.teacherA1)).toBeNull();
-  });
-
-  it("a branch admin cannot view school-wide admins", async () => {
-    expect(await getMember(db, branchAdminA1, t.memberships.adminA)).toBeNull();
+  it("a branch admin cannot view staff of another branch or school-wide admins", async () => {
+    expect(await getStaff(db, mainBranchAdmin, t.users.northTeacher)).toBeNull();
+    expect(await getStaff(db, mainBranchAdmin, t.users.admin)).toBeNull();
   });
 });
 
-describe("cross-school and cross-branch management", () => {
-  it("school A admin cannot change roles, access, status, or names of school B members", async () => {
-    expect(await setMemberRoles(db, adminA, t.memberships.adminB, [roleIds.teacher])).toBeNull();
-    expect(await setMemberAccess(db, adminA, t.memberships.adminB, { scope: "school" })).toBeNull();
-    expect(await setMemberStatus(db, adminA, t.memberships.adminB, "suspended")).toBeNull();
+describe("cross-branch management", () => {
+  it("branch admin cannot change roles, access, status, or names outside their branch", async () => {
+    const target = t.users.northTeacher;
+    expect(await setStaffRoles(db, mainBranchAdmin, target, [roleIds.teacher])).toBeNull();
     expect(
-      await updateMemberProfile(db, adminA, t.memberships.adminB, { displayName: "Hijacked" }),
+      await setStaffAccess(db, mainBranchAdmin, target, {
+        scope: "branch",
+        branchIds: [t.branches.main],
+      }),
     ).toBeNull();
-    const [b] = await ownerQuery<{ status: string; display_name: string }>(
-      `select m.status, u.display_name from school_memberships m join users u on u.id = m.user_id where m.id = $1`,
-      [t.memberships.adminB],
+    expect(await setStaffStatus(db, mainBranchAdmin, target, "deactivated")).toBeNull();
+    expect(
+      await updateStaffProfile(db, mainBranchAdmin, target, { displayName: "Hijacked" }),
+    ).toBeNull();
+    const [row] = await ownerQuery<{ status: string; display_name: string }>(
+      `select status, display_name from users where id = $1`,
+      [target],
     );
-    expect(b).toEqual({ status: "active", display_name: "Admin B" });
+    expect(row).toEqual({ status: "active", display_name: "North Teacher" });
   });
 
-  it("branch admin cannot edit someone who also works at a branch outside their scope", async () => {
-    await ownerQuery(
-      `insert into membership_branches (school_id, membership_id, branch_id) values ($1, $2, $3)`,
-      [t.schoolA.id, t.memberships.teacherA1, t.schoolA.branchA2],
-    );
+  it("branch admin cannot manage someone who also works at a branch outside their scope", async () => {
+    await ownerQuery(`insert into user_branches (user_id, branch_id) values ($1, $2)`, [
+      t.users.mainTeacher,
+      t.branches.north,
+    ]);
     expect(
-      await setMemberStatus(db, branchAdminA1, t.memberships.teacherA1, "suspended"),
+      await setStaffStatus(db, mainBranchAdmin, t.users.mainTeacher, "deactivated"),
     ).toBeNull();
   });
 
-  it("branch admin cannot deactivate a school admin", async () => {
-    expect(await setMemberStatus(db, branchAdminA1, t.memberships.adminA, "suspended")).toBeNull();
+  it("branch admin cannot deactivate the school admin", async () => {
+    expect(await setStaffStatus(db, mainBranchAdmin, t.users.admin, "deactivated")).toBeNull();
   });
 });
 
 describe("escalation and forged payloads", () => {
-  it("rejects a role ID belonging to another school", async () => {
-    const [bAdminRole] = await ownerQuery<{ id: string }>(
-      `select id from roles where school_id = $1 and key = 'school_admin'`,
-      [t.schoolB.id],
-    );
-    await expect(
-      setMemberRoles(db, adminA, t.memberships.teacherA1, [bAdminRole.id]),
-    ).rejects.toThrow(/not available in this school/);
-  });
-
   it("branch admin cannot grant the school admin role or school-wide scope", async () => {
     await expect(
-      setMemberRoles(db, branchAdminA1, t.memberships.teacherA1, [roleIds.school_admin]),
+      setStaffRoles(db, mainBranchAdmin, t.users.mainTeacher, [roleIds.school_admin]),
     ).rejects.toThrow(/permissions you do not have/);
     await expect(
-      setMemberAccess(db, branchAdminA1, t.memberships.teacherA1, { scope: "school" }),
+      setStaffAccess(db, mainBranchAdmin, t.users.mainTeacher, { scope: "school" }),
     ).rejects.toThrow(/school-wide administrators/);
     await expect(
-      setMemberAccess(db, branchAdminA1, t.memberships.teacherA1, {
+      setStaffAccess(db, mainBranchAdmin, t.users.mainTeacher, {
         scope: "branch",
-        branchIds: [t.schoolA.branchA2],
+        branchIds: [t.branches.north],
       }),
     ).rejects.toThrow(/branches you are assigned to/);
   });
 
   it("nobody can change their own roles, access, or status", async () => {
-    await expect(
-      setMemberRoles(db, adminA, t.memberships.adminA, [roleIds.school_admin]),
-    ).rejects.toThrow(/your own access/);
-    await expect(setMemberStatus(db, adminA, t.memberships.adminA, "suspended")).rejects.toThrow(
+    await expect(setStaffRoles(db, admin, t.users.admin, [roleIds.school_admin])).rejects.toThrow(
+      /your own access/,
+    );
+    await expect(setStaffStatus(db, admin, t.users.admin, "deactivated")).rejects.toThrow(
       /your own access/,
     );
     await expect(
-      setMemberRoles(db, branchAdminA1, t.memberships.branchAdminA1, [roleIds.school_admin]),
+      setStaffRoles(db, mainBranchAdmin, t.users.mainBranchAdmin, [roleIds.school_admin]),
     ).rejects.toThrow(ForbiddenError);
   });
 
-  it("rejects payloads with unexpected fields such as permissions or schoolId", async () => {
+  it("rejects payloads with unexpected fields such as permissions or status", async () => {
     for (const forged of [
       { permissions: ["users.assign_roles"] },
-      { schoolId: t.schoolB.id },
-      { isPlatformAdmin: true },
+      { status: "active" },
+      { accessScope: "school" },
     ]) {
       await expect(
-        inviteMember(
+        inviteStaff(
           db,
-          adminA,
+          admin,
           new MemoryMailer(),
           {
             email: "forged@example.test",
@@ -242,9 +231,9 @@ describe("escalation and forged payloads", () => {
       ).rejects.toThrow();
     }
     await expect(
-      setMemberAccess(db, adminA, t.memberships.teacherA1, {
+      setStaffAccess(db, admin, t.users.mainTeacher, {
         scope: "school",
-        branchIds: [t.schoolB.branchB1],
+        branchIds: [t.branches.north],
       }),
     ).rejects.toThrow();
     expect(
@@ -252,20 +241,21 @@ describe("escalation and forged payloads", () => {
     ).toHaveLength(0);
   });
 
-  it("rejects a branch from another school", async () => {
+  it("rejects branch and role IDs that do not exist", async () => {
+    const ghost = "00000000-0000-4000-8000-999999999999";
     await expect(
-      setMemberAccess(db, adminA, t.memberships.teacherA1, {
-        scope: "branch",
-        branchIds: [t.schoolB.branchB1],
-      }),
-    ).rejects.toThrow(/not part of this school/);
+      setStaffAccess(db, admin, t.users.mainTeacher, { scope: "branch", branchIds: [ghost] }),
+    ).rejects.toThrow(/do not exist/);
+    await expect(setStaffRoles(db, admin, t.users.mainTeacher, [ghost])).rejects.toThrow(
+      /do not exist/,
+    );
   });
 
   it("a forged context object is rejected by every service", async () => {
-    const forged = { ...adminA, schoolId: t.schoolB.id } as TenantContext;
-    await expect(listMembers(db, forged)).rejects.toThrow(TenantAccessError);
-    await expect(setMemberStatus(db, forged, t.memberships.adminB, "suspended")).rejects.toThrow(
-      TenantAccessError,
+    const forged = { ...mainTeacher, scope: { kind: "school" } } as AccessContext;
+    await expect(listStaff(db, forged)).rejects.toThrow(AccessDeniedError);
+    await expect(setStaffStatus(db, forged, t.users.northTeacher, "deactivated")).rejects.toThrow(
+      AccessDeniedError,
     );
   });
 });
@@ -273,9 +263,9 @@ describe("escalation and forged payloads", () => {
 describe("invitations", () => {
   it("invites a new person, who can sign in only after accepting", async () => {
     const mailer = new MemoryMailer();
-    const result = await inviteTeacherToA1(branchAdminA1, mailer);
-    expect(result.invitationSent).toBe(true);
+    const result = await inviteMainTeacher(mainBranchAdmin, mailer);
     expect(mailer.sent[0].text).toContain(`${appUrl}/accept-invitation#token=`);
+    expect(mailer.sent[0].subject).toBe("You're invited to Example Academy");
 
     expect(
       (await login(db, { email: "new.teacher@example.test", password: PASSWORD, ip: nextIp() })).ok,
@@ -293,14 +283,14 @@ describe("invitations", () => {
       ip: nextIp(),
     });
     expect(signedIn.ok).toBe(true);
-    const context = await ctx(result.userId, t.schoolA.id);
-    expect(context.scope).toEqual({ kind: "branch", branchIds: [t.schoolA.branchA1] });
+    const context = await resolve(result.userId);
+    expect(context.scope).toEqual({ kind: "branch", branchIds: [t.branches.main] });
     expect(context.permissions).toEqual(["branches.read"]);
   });
 
   it("stores only a hash of the invitation token", async () => {
     const mailer = new MemoryMailer();
-    await inviteTeacherToA1(adminA, mailer);
+    await inviteMainTeacher(admin, mailer);
     const rows = await ownerQuery<{ token_hash: string }>(
       `select token_hash from user_invitations`,
     );
@@ -311,7 +301,7 @@ describe("invitations", () => {
 
   it("an invitation link cannot be replayed", async () => {
     const mailer = new MemoryMailer();
-    await inviteTeacherToA1(adminA, mailer);
+    await inviteMainTeacher(admin, mailer);
     const token = tokenFrom(mailer);
     expect(
       (await acceptInvitation(db, { token, password: "first password 123", ip: nextIp() })).ok,
@@ -333,9 +323,9 @@ describe("invitations", () => {
     ).toBe(false);
   });
 
-  it("expired and resent invitations invalidate old links", async () => {
+  it("expired invitations do not work", async () => {
     const mailer = new MemoryMailer();
-    await inviteTeacherToA1(adminA, mailer);
+    await inviteMainTeacher(admin, mailer);
     await ownerQuery(`update user_invitations set expires_at = now() - interval '1 second'`);
     expect(
       (
@@ -348,42 +338,17 @@ describe("invitations", () => {
     ).toBe(false);
   });
 
-  it("adds an existing active account without a new password link", async () => {
-    const mailer = new MemoryMailer();
-    const result = await inviteMember(
-      db,
-      adminB,
-      mailer,
-      {
-        email: "teacher.a1@example.test",
-        displayName: "Ignored",
-        access: { scope: "school" },
-        roleIds: [
-          (
-            await ownerQuery<{ id: string }>(
-              `select id from roles where school_id = $1 and key = 'teacher'`,
-              [t.schoolB.id],
-            )
-          )[0].id,
-        ],
-      },
-      appUrl,
-    );
-    expect(result.invitationSent).toBe(false);
-    expect(mailer.sent[0].text).not.toContain("#token=");
-  });
-
-  it("refuses to invite someone who is already a member", async () => {
+  it("refuses to invite an email that already has an account", async () => {
     await expect(
-      inviteTeacherToA1(adminA, new MemoryMailer(), "teacher.a1@example.test"),
-    ).rejects.toThrow(/already a member/);
+      inviteMainTeacher(admin, new MemoryMailer(), "main.teacher@example.test"),
+    ).rejects.toThrow(/already exists/);
   });
 
   it("branch admin cannot invite with school-wide scope or escalated roles", async () => {
     await expect(
-      inviteMember(
+      inviteStaff(
         db,
-        branchAdminA1,
+        mainBranchAdmin,
         new MemoryMailer(),
         {
           email: "x@example.test",
@@ -395,14 +360,14 @@ describe("invitations", () => {
       ),
     ).rejects.toThrow(ForbiddenError);
     await expect(
-      inviteMember(
+      inviteStaff(
         db,
-        branchAdminA1,
+        mainBranchAdmin,
         new MemoryMailer(),
         {
           email: "x@example.test",
           displayName: "X Person",
-          access: { scope: "branch", branchIds: [t.schoolA.branchA1] },
+          access: { scope: "branch", branchIds: [t.branches.main] },
           roleIds: [roleIds.school_admin],
         },
         appUrl,
@@ -412,67 +377,72 @@ describe("invitations", () => {
 });
 
 describe("deactivation", () => {
-  it("deactivating the only membership deactivates the account and ends its sessions", async () => {
+  it("removing access deactivates the account and ends its sessions immediately", async () => {
     const signedIn = await login(db, {
-      email: "teacher.a1@example.test",
+      email: "main.teacher@example.test",
       password: PASSWORD,
       ip: nextIp(),
     });
     if (!signedIn.ok) throw new Error("login failed");
-    const updated = await setMemberStatus(db, adminA, t.memberships.teacherA1, "suspended");
-    expect(updated).toMatchObject({ membershipStatus: "suspended", userStatus: "deactivated" });
+    const updated = await setStaffStatus(db, admin, t.users.mainTeacher, "deactivated");
+    expect(updated).toMatchObject({ status: "deactivated" });
     expect(await validateSession(db, signedIn.token)).toBeNull();
     expect(
-      (await login(db, { email: "teacher.a1@example.test", password: PASSWORD, ip: nextIp() })).ok,
+      (await login(db, { email: "main.teacher@example.test", password: PASSWORD, ip: nextIp() }))
+        .ok,
     ).toBe(false);
+    await expect(resolve(t.users.mainTeacher)).rejects.toThrow(AccessDeniedError);
 
-    const restored = await setMemberStatus(db, adminA, t.memberships.teacherA1, "active");
-    expect(restored).toMatchObject({ membershipStatus: "active", userStatus: "active" });
+    const restored = await setStaffStatus(db, admin, t.users.mainTeacher, "active");
+    expect(restored).toMatchObject({ status: "active" });
   });
 
-  it("for a multi-school user, only this school's access ends", async () => {
-    const signedIn = await login(db, {
-      email: "multi@example.test",
-      password: PASSWORD,
-      ip: nextIp(),
+  it("restoring someone who never set a password returns them to invited", async () => {
+    await inviteMainTeacher(admin);
+    const [invited] = await ownerQuery<{ id: string }>(
+      `select id from users where email = 'new.teacher@example.test'`,
+    );
+    await setStaffStatus(db, admin, invited.id, "deactivated");
+    expect(await setStaffStatus(db, admin, invited.id, "active")).toMatchObject({
+      status: "invited",
     });
-    if (!signedIn.ok) throw new Error("login failed");
-    await setMemberStatus(db, adminA, t.memberships.multiA, "suspended");
-    expect(await validateSession(db, signedIn.token)).not.toBeNull();
-    await expect(ctx(t.users.multiSchool, t.schoolA.id)).rejects.toThrow(TenantAccessError);
-    await expect(ctx(t.users.multiSchool, t.schoolB.id)).resolves.toBeDefined();
   });
 
-  it("a school cannot rename a person who also belongs to another school", async () => {
-    await expect(
-      updateMemberProfile(db, adminA, t.memberships.multiA, { displayName: "Renamed" }),
-    ).rejects.toThrow(/another school/);
+  it("history is kept: records of a deactivated person remain", async () => {
+    await setStaffRoles(db, admin, t.users.mainTeacher, [roleIds.teacher, roleIds.registrar]);
+    await setStaffStatus(db, admin, t.users.mainTeacher, "deactivated");
+    const [row] = await ownerQuery<{ n: number }>(
+      `select count(*)::int as n from audit_events where target_id = $1`,
+      [t.users.mainTeacher],
+    );
+    expect(row.n).toBe(2);
     expect(
-      await updateMemberProfile(db, adminA, t.memberships.teacherA1, {
-        displayName: "Teacher Renamed",
-      }),
-    ).toMatchObject({
-      displayName: "Teacher Renamed",
-    });
+      await ownerQuery(`select 1 from users where id = $1`, [t.users.mainTeacher]),
+    ).toHaveLength(1);
+  });
+
+  it("administrators can correct a staff member's name", async () => {
+    expect(
+      await updateStaffProfile(db, admin, t.users.mainTeacher, { displayName: "Teacher Renamed" }),
+    ).toMatchObject({ displayName: "Teacher Renamed" });
   });
 });
 
 describe("audit and re-authentication", () => {
   it("records invitations, role changes, access changes, and deactivation", async () => {
-    await inviteTeacherToA1(adminA);
-    await setMemberRoles(db, adminA, t.memberships.teacherA1, [roleIds.teacher, roleIds.registrar]);
-    await setMemberAccess(db, adminA, t.memberships.teacherA1, {
+    await inviteMainTeacher(admin);
+    await setStaffRoles(db, admin, t.users.mainTeacher, [roleIds.teacher, roleIds.registrar]);
+    await setStaffAccess(db, admin, t.users.mainTeacher, {
       scope: "branch",
-      branchIds: [t.schoolA.branchA2],
+      branchIds: [t.branches.north],
     });
-    await setMemberStatus(db, adminA, t.memberships.teacherA1, "suspended");
+    await setStaffStatus(db, admin, t.users.mainTeacher, "deactivated");
     const events = await ownerQuery<{
       action: string;
-      school_id: string;
       actor_user_id: string;
       metadata: Record<string, unknown>;
     }>(
-      `select action, school_id, actor_user_id, metadata from audit_events where action like 'user.%' order by occurred_at`,
+      `select action, actor_user_id, metadata from audit_events where action like 'user.%' order by occurred_at`,
     );
     expect(events.map((e) => e.action)).toEqual([
       "user.invite",
@@ -480,8 +450,7 @@ describe("audit and re-authentication", () => {
       "user.access.update",
       "user.deactivate",
     ]);
-    for (const event of events)
-      expect(event).toMatchObject({ school_id: t.schoolA.id, actor_user_id: t.users.adminA });
+    for (const event of events) expect(event.actor_user_id).toBe(t.users.admin);
     expect(events[1].metadata).toMatchObject({
       before: ["teacher"],
       after: ["registrar", "teacher"],
@@ -490,7 +459,7 @@ describe("audit and re-authentication", () => {
 
   it("requires a recent password for high-risk actions", async () => {
     const signedIn = await login(db, {
-      email: "admin.a@example.test",
+      email: "admin@example.test",
       password: PASSWORD,
       ip: nextIp(),
     });
@@ -510,15 +479,19 @@ describe("audit and re-authentication", () => {
 });
 
 describe("profile photo visibility", () => {
-  it("only colleagues in scope can resolve another member's photo", async () => {
+  it("only colleagues in scope can resolve another person's photo", async () => {
     await ownerQuery(`update users set avatar_key = 'avatars/x/photo.webp' where id = $1`, [
-      t.users.teacherA1,
+      t.users.mainTeacher,
     ]);
-    expect(await getVisibleAvatarKey(db, adminA, t.users.teacherA1)).toBe("avatars/x/photo.webp");
-    expect(await getVisibleAvatarKey(db, branchAdminA1, t.users.teacherA1)).toBe(
+    expect(await getVisibleAvatarKey(db, admin, t.users.mainTeacher)).toBe("avatars/x/photo.webp");
+    expect(await getVisibleAvatarKey(db, mainBranchAdmin, t.users.mainTeacher)).toBe(
       "avatars/x/photo.webp",
     );
-    expect(await getVisibleAvatarKey(db, adminB, t.users.teacherA1)).toBeNull();
-    expect(await getVisibleAvatarKey(db, teacherA1, t.users.adminA)).toBeNull();
+    const north = await resolve(t.users.northTeacher);
+    expect(await getVisibleAvatarKey(db, north, t.users.mainTeacher)).toBeNull();
+    await ownerQuery(`update users set avatar_key = 'avatars/y/photo.webp' where id = $1`, [
+      t.users.northTeacher,
+    ]);
+    expect(await getVisibleAvatarKey(db, mainBranchAdmin, t.users.northTeacher)).toBeNull();
   });
 });

@@ -1,39 +1,109 @@
 @import "tailwindcss";
 
-/* Design tokens: calm neutral surfaces, one restrained accent, semantic status colors. */
+/* Dark mode follows the data-theme attribute set before first paint (see ThemeScript). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * Design tokens. Light is the default; dark applies when data-theme="dark", or — without
+ * JavaScript — when the operating system prefers dark.
+ */
 :root {
-  --background: #f6f7f9;
+  color-scheme: light;
+  --background: #f4f6fb;
   --surface: #ffffff;
-  --surface-muted: #f1f3f6;
-  --border: #dde1e7;
-  --foreground: #16181d;
-  --muted: #5b6372;
-  --primary: #2f5bd3;
-  --primary-hover: #2449b0;
+  --surface-muted: #f1f4f9;
+  --surface-raised: #ffffff;
+  --border: #e2e7f0;
+  --border-strong: #cbd3e1;
+  --foreground: #121826;
+  --muted: #5a6478;
+  --subtle: #677085;
+  --primary: #4338ca;
+  --primary-hover: #3730a3;
   --primary-foreground: #ffffff;
+  --primary-soft: #eef0ff;
+  --accent: #0d9488;
+  --accent-soft: #e6f7f5;
   --danger: #b42318;
   --danger-surface: #fef3f2;
   --success: #067647;
   --success-surface: #ecfdf3;
-  --focus: #2f5bd3;
+  --warning: #b54708;
+  --warning-surface: #fffaeb;
+  --focus: #4338ca;
+  --sidebar: #0f1733;
+  --sidebar-foreground: #c7cde0;
+  --sidebar-muted: #7f89a8;
+  --sidebar-active: #ffffff;
+  --sidebar-active-bg: rgb(255 255 255 / 0.1);
+  --hero-from: #4338ca;
+  --hero-to: #0d9488;
+  --shadow: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
 }
 
+[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0b1020;
+  --surface: #121a2e;
+  --surface-muted: #18213a;
+  --surface-raised: #1b2540;
+  --border: #253154;
+  --border-strong: #34426b;
+  --foreground: #e6e9f2;
+  --muted: #a3acc2;
+  --subtle: #8f99b1;
+  --primary: #8f9bff;
+  --primary-hover: #aeb7ff;
+  --primary-foreground: #0b1020;
+  --primary-soft: #1d2550;
+  --accent: #2dd4bf;
+  --accent-soft: #10302e;
+  --danger: #fda29b;
+  --danger-surface: #2a1513;
+  --success: #75e0a7;
+  --success-surface: #0f2419;
+  --warning: #fdb022;
+  --warning-surface: #2b1d06;
+  --focus: #aeb7ff;
+  --sidebar: #080c19;
+  --sidebar-foreground: #b4bcd3;
+  --sidebar-muted: #8c96b3;
+  --sidebar-active: #ffffff;
+  --sidebar-active-bg: rgb(143 155 255 / 0.16);
+  --hero-from: #312e81;
+  --hero-to: #0f766e;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.4);
+}
+
+/* No JavaScript and no stored choice: follow the operating system. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f1115;
-    --surface: #171a21;
-    --surface-muted: #1e222b;
-    --border: #2c323d;
-    --foreground: #e8eaee;
-    --muted: #a0a7b4;
-    --primary: #7d9cf5;
-    --primary-hover: #9bb3f8;
-    --primary-foreground: #0f1115;
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --background: #0b1020;
+    --surface: #121a2e;
+    --surface-muted: #18213a;
+    --surface-raised: #1b2540;
+    --border: #253154;
+    --border-strong: #34426b;
+    --foreground: #e6e9f2;
+    --muted: #a3acc2;
+    --subtle: #8f99b1;
+    --primary: #8f9bff;
+    --primary-hover: #aeb7ff;
+    --primary-foreground: #0b1020;
+    --primary-soft: #1d2550;
+    --accent: #2dd4bf;
+    --accent-soft: #10302e;
     --danger: #fda29b;
     --danger-surface: #2a1513;
     --success: #75e0a7;
     --success-surface: #0f2419;
-    --focus: #9bb3f8;
+    --warning: #fdb022;
+    --warning-surface: #2b1d06;
+    --focus: #aeb7ff;
+    --sidebar: #080c19;
+    --hero-from: #312e81;
+    --hero-to: #0f766e;
   }
 }
 
@@ -41,17 +111,33 @@
   --color-background: var(--background);
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
+  --color-surface-raised: var(--surface-raised);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
   --color-danger: var(--danger);
   --color-danger-surface: var(--danger-surface);
   --color-success: var(--success);
   --color-success-surface: var(--success-surface);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
   --color-focus: var(--focus);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-active-bg: var(--sidebar-active-bg);
+  --color-hero-from: var(--hero-from);
+  --color-hero-to: var(--hero-to);
+  --shadow-card: var(--shadow);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -66,4 +152,13 @@ body {
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -12,12 +12,12 @@ Build the polished, responsive application shell and role-aware dashboard.
 - Use a consistent design system and reusable components.
 
 ## Acceptance criteria
-- [ ] Platform admin, school admin, branch admin, and teacher see appropriate navigation.
-- [ ] School admin can switch between branches within their school where permitted.
+- [ ] School admin, branch admin, and teacher see appropriate navigation.
+- [ ] School admin can switch between all branches; branch staff between their assigned branches.
 - [ ] Branch users cannot select or query an unassigned branch.
 - [ ] Dashboard metrics use scoped server-side queries; no fabricated live data.
 - [ ] Core screens work on mobile, tablet, and desktop.
 - [ ] Keyboard focus and labels are usable; no critical accessibility issues remain.
 
 ## Required tests
-Role-based navigation, tenant/branch context switching, responsive viewport checks, loading/empty/error states, and attempts to fetch dashboard data outside the user's scope.
+Role-based navigation, branch context switching, responsive viewport checks, loading/empty/error states, and attempts to fetch dashboard data outside the user's scope.

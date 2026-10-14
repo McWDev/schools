@@ -1,21 +1,13 @@
 import "server-only";
 
-import { and, count, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 
+import { resolveBranchFilter, type BranchOption } from "@/server/access/branch-filter";
+import { hasPermission, withAccess, type AccessContext } from "@/server/access/context";
+import { ForbiddenError } from "@/server/access/errors";
 import type { Database } from "@/server/db/client";
-import {
-  auditEvents,
-  branches,
-  membershipBranches,
-  roles,
-  membershipRoles,
-  schoolMemberships,
-  users,
-} from "@/server/db/schema";
-import { visibleMembershipsFilter } from "@/server/modules/users/access-rules";
-import { resolveBranchFilter, type BranchOption } from "@/server/tenancy/branch-filter";
-import { hasPermission, withTenant, type TenantContext } from "@/server/tenancy/context";
-import { ForbiddenError } from "@/server/tenancy/errors";
+import { auditEvents, branches, roles, userRoles, users } from "@/server/db/schema";
+import { visibleUsersFilter } from "@/server/modules/users/access-rules";
 
 export interface ActivityItem {
   id: string;
@@ -34,37 +26,33 @@ export interface DashboardSummary {
   recentActivity?: ActivityItem[];
 }
 
+/** Administrative actions shown in the activity feed (sign-ins and profile edits are not). */
+const ADMIN_ACTIONS = sql`(${auditEvents.action} like 'user.%' or ${auditEvents.action} like 'branch.%' or ${auditEvents.action} like 'school.%')`;
+
 /**
  * Summary for the dashboard, computed with scoped queries only. A requested branch outside the
- * viewer's scope (or in another school) is refused, never silently widened or narrowed.
+ * viewer's scope is refused, never silently widened or narrowed.
  */
 export async function getDashboardSummary(
   db: Database,
-  context: TenantContext,
+  context: AccessContext,
   requestedBranchId: string | null,
 ): Promise<DashboardSummary> {
   const branch = requestedBranchId
     ? await resolveBranchFilter(db, context, requestedBranchId)
     : null;
-  if (requestedBranchId && !branch)
+  if (requestedBranchId && !branch) {
     throw new ForbiddenError("That branch is not available to you.");
+  }
 
-  return withTenant(db, context, async (tx) => {
+  return withAccess(db, context, async (tx) => {
     const summary: DashboardSummary = { branch, myRoles: [] };
 
     const mine = await tx
       .select({ name: roles.name })
-      .from(membershipRoles)
-      .innerJoin(
-        roles,
-        and(eq(roles.id, membershipRoles.roleId), eq(roles.schoolId, membershipRoles.schoolId)),
-      )
-      .where(
-        and(
-          eq(membershipRoles.schoolId, context.schoolId),
-          eq(membershipRoles.membershipId, context.membershipId),
-        ),
-      )
+      .from(userRoles)
+      .innerJoin(roles, eq(roles.id, userRoles.roleId))
+      .where(eq(userRoles.userId, context.userId))
       .orderBy(roles.name);
     summary.myRoles = mine.map((r) => r.name);
 
@@ -80,40 +68,31 @@ export async function getDashboardSummary(
       const [row] = await tx
         .select({ n: count() })
         .from(branches)
-        .where(and(eq(branches.schoolId, context.schoolId), eq(branches.status, "active"), scope));
+        .where(and(eq(branches.status, "active"), scope));
       summary.branches = { active: row.n };
     }
 
     if (hasPermission(context, "users.read")) {
       // With a branch selected, count staff assigned to it plus school-wide staff.
       const inBranch = branch
-        ? sql`(${schoolMemberships.scope} = 'school' or exists (
-            select 1 from ${membershipBranches} mb
-            where mb.membership_id = ${schoolMemberships.id} and mb.branch_id = ${branch.id}))`
+        ? sql`(${users.accessScope} = 'school' or exists (
+            select 1 from user_branches ub where ub.user_id = ${users.id} and ub.branch_id = ${branch.id}))`
         : undefined;
       const rows = await tx
-        .select({
-          status: schoolMemberships.status,
-          invited: sql<boolean>`${users.status} = 'invited'`,
-          n: count(),
-        })
-        .from(schoolMemberships)
-        .innerJoin(users, eq(users.id, schoolMemberships.userId))
-        .where(
-          and(visibleMembershipsFilter(context), ne(schoolMemberships.status, "removed"), inBranch),
-        )
-        .groupBy(schoolMemberships.status, sql`${users.status} = 'invited'`);
-      const sum = (pick: (r: (typeof rows)[number]) => boolean) =>
-        rows.filter(pick).reduce((total, r) => total + r.n, 0);
+        .select({ status: users.status, n: count() })
+        .from(users)
+        .where(and(visibleUsersFilter(context), inBranch))
+        .groupBy(users.status);
+      const of = (status: string) => rows.find((r) => r.status === status)?.n ?? 0;
       summary.staff = {
-        active: sum((r) => r.status === "active" && !r.invited),
-        pendingInvitations: sum((r) => r.status === "active" && r.invited),
-        noAccess: sum((r) => r.status === "suspended"),
+        active: of("active"),
+        pendingInvitations: of("invited"),
+        noAccess: of("deactivated") + of("suspended"),
       };
     }
 
     if (hasPermission(context, "audit.read")) {
-      const events = await tx
+      summary.recentActivity = await tx
         .select({
           id: auditEvents.id,
           occurredAt: auditEvents.occurredAt,
@@ -123,39 +102,21 @@ export async function getDashboardSummary(
         })
         .from(auditEvents)
         .leftJoin(users, eq(users.id, auditEvents.actorUserId))
-        .where(and(eq(auditEvents.schoolId, context.schoolId), isNotNull(auditEvents.action)))
+        .where(ADMIN_ACTIONS)
         .orderBy(desc(auditEvents.occurredAt))
         .limit(8);
-      summary.recentActivity = events;
     }
 
     return summary;
   });
 }
 
-/** Aggregate school counts for platform administrators (no school records are exposed). */
-export async function getPlatformOverview(
-  db: Database,
-  user: { userId: string; isPlatformAdmin: boolean },
-): Promise<{ total: number; byStatus: Record<string, number> } | null> {
-  if (!user.isPlatformAdmin) return null;
-  const rows = await db.transaction(async (tx) => {
-    await tx.execute(sql`select set_config('app.user_id', ${user.userId}, true)`);
-    return (
-      await tx.execute<{ status: string; total: number }>(
-        sql`select * from app.platform_school_counts()`,
-      )
-    ).rows;
-  });
-  const byStatus = Object.fromEntries(rows.map((r) => [r.status, r.total]));
-  return { total: rows.reduce((sum, r) => sum + r.total, 0), byStatus };
-}
-
 /** Plain-language description of an audit action for the activity feed. */
 export function describeAction(action: string): string {
   const labels: Record<string, string> = {
-    "branch.create": "created a branch",
+    "branch.create": "opened a branch",
     "branch.update": "updated a branch",
+    "school.settings.update": "updated the school profile",
     "user.invite": "invited a staff member",
     "user.invite.resend": "re-sent an invitation",
     "user.roles.update": "changed a staff member's roles",

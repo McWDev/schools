@@ -1,16 +1,19 @@
 // Table definitions only — no secrets or connection logic, so drizzle-kit can load this file
 // directly. Row-level security, roles, grants, and triggers live in hand-written migrations.
+//
+// One installation serves exactly one school. The school has many branches (campuses in
+// different areas); staff work either school-wide or in assigned branches.
 import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
-  foreignKey,
   index,
   integer,
   jsonb,
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   unique,
@@ -22,53 +25,48 @@ const timestamps = {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
 
-export const schoolStatus = pgEnum("school_status", ["pending", "active", "suspended", "closed"]);
 export const branchStatus = pgEnum("branch_status", ["active", "inactive"]);
 export const userStatus = pgEnum("user_status", ["invited", "active", "suspended", "deactivated"]);
-export const membershipStatus = pgEnum("membership_status", ["active", "suspended", "removed"]);
-export const membershipScope = pgEnum("membership_scope", ["school", "branch"]);
+/** "school": every branch. "branch": only the branches listed in user_branches. */
+export const accessScope = pgEnum("access_scope", ["school", "branch"]);
 export const auditOutcome = pgEnum("audit_outcome", ["success", "denied", "failure"]);
 
-export const schools = pgTable(
-  "schools",
+/** The school's profile. Exactly one row (id = 1), created by migrations and edited in Settings. */
+export const schoolSettings = pgTable(
+  "school_settings",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: smallint("id").primaryKey().default(1),
     name: text("name").notNull(),
-    slug: text("slug").notNull(),
-    status: schoolStatus("status").notNull().default("pending"),
+    shortName: text("short_name"),
     timezone: text("timezone").notNull().default("UTC"),
     locale: text("locale").notNull().default("en"),
+    email: text("email"),
+    phone: text("phone"),
+    address: text("address"),
     ...timestamps,
   },
-  (t) => [
-    unique("schools_slug_key").on(t.slug),
-    check("schools_slug_format", sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
-  ],
+  (t) => [check("school_settings_singleton", sql`${t.id} = 1`)],
 );
 
+/** Campuses of the school, each in its own area. */
 export const branches = pgTable(
   "branches",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    schoolId: uuid("school_id")
-      .notNull()
-      .references(() => schools.id, { onDelete: "restrict" }),
     name: text("name").notNull(),
     code: text("code").notNull(),
     status: branchStatus("status").notNull().default("active"),
+    /** Town, district, or neighbourhood the branch serves. */
+    area: text("area"),
     address: text("address"),
     phone: text("phone"),
     email: text("email"),
     ...timestamps,
   },
-  (t) => [
-    // Target for composite foreign keys so child rows cannot mix schools and branches.
-    unique("branches_school_id_id_key").on(t.schoolId, t.id),
-    unique("branches_school_id_code_key").on(t.schoolId, t.code),
-  ],
+  (t) => [unique("branches_code_key").on(t.code)],
 );
 
-/** Global login identity. A user may belong to several schools through memberships. */
+/** Staff accounts and their access scope. */
 export const users = pgTable(
   "users",
   {
@@ -76,7 +74,7 @@ export const users = pgTable(
     email: text("email").notNull(),
     displayName: text("display_name").notNull(),
     status: userStatus("status").notNull().default("invited"),
-    isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
+    accessScope: accessScope("access_scope").notNull().default("branch"),
     /** argon2id hash; null until the user sets a password via invitation or reset link. */
     passwordHash: text("password_hash"),
     passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
@@ -90,49 +88,71 @@ export const users = pgTable(
   ],
 );
 
-export const schoolMemberships = pgTable(
-  "school_memberships",
+/** Branches a branch-scoped user works in. */
+export const userBranches = pgTable(
+  "user_branches",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    schoolId: uuid("school_id")
-      .notNull()
-      .references(() => schools.id, { onDelete: "restrict" }),
     userId: uuid("user_id")
       .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
-    status: membershipStatus("status").notNull().default("active"),
-    scope: membershipScope("scope").notNull().default("branch"),
-    ...timestamps,
-  },
-  (t) => [
-    unique("school_memberships_school_id_user_id_key").on(t.schoolId, t.userId),
-    unique("school_memberships_school_id_id_key").on(t.schoolId, t.id),
-    index("school_memberships_user_id_idx").on(t.userId),
-  ],
-);
-
-/** Branches a branch-scoped membership may access. Both FKs include school_id. */
-export const membershipBranches = pgTable(
-  "membership_branches",
-  {
-    schoolId: uuid("school_id").notNull(),
-    membershipId: uuid("membership_id").notNull(),
-    branchId: uuid("branch_id").notNull(),
+      .references(() => users.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "restrict" }),
     createdAt: timestamps.createdAt,
   },
   (t) => [
-    primaryKey({ columns: [t.membershipId, t.branchId] }),
-    foreignKey({
-      name: "membership_branches_membership_fk",
-      columns: [t.schoolId, t.membershipId],
-      foreignColumns: [schoolMemberships.schoolId, schoolMemberships.id],
-    }).onDelete("cascade"),
-    foreignKey({
-      name: "membership_branches_branch_fk",
-      columns: [t.schoolId, t.branchId],
-      foreignColumns: [branches.schoolId, branches.id],
-    }).onDelete("restrict"),
-    index("membership_branches_school_id_branch_id_idx").on(t.schoolId, t.branchId),
+    primaryKey({ columns: [t.userId, t.branchId] }),
+    index("user_branches_branch_id_idx").on(t.branchId),
+  ],
+);
+
+/** Stable permission codes, e.g. "users.invite". Defined by migrations only. */
+export const permissions = pgTable("permissions", {
+  code: text("code").primaryKey(),
+  description: text("description").notNull(),
+});
+
+/** Roles. System roles are installed by migrations and cannot be edited in the app. */
+export const roles = pgTable(
+  "roles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    key: text("key").notNull(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    isSystem: boolean("is_system").notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [unique("roles_key_key").on(t.key)],
+);
+
+export const rolePermissions = pgTable(
+  "role_permissions",
+  {
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => roles.id, { onDelete: "cascade" }),
+    permissionCode: text("permission_code")
+      .notNull()
+      .references(() => permissions.code, { onDelete: "restrict" }),
+  },
+  (t) => [primaryKey({ columns: [t.roleId, t.permissionCode] })],
+);
+
+export const userRoles = pgTable(
+  "user_roles",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => roles.id, { onDelete: "restrict" }),
+    createdAt: timestamps.createdAt,
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.roleId] }),
+    index("user_roles_role_id_idx").on(t.roleId),
   ],
 );
 
@@ -142,8 +162,7 @@ export const auditEvents = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
-    schoolId: uuid("school_id").references(() => schools.id, { onDelete: "restrict" }),
-    branchId: uuid("branch_id"),
+    branchId: uuid("branch_id").references(() => branches.id, { onDelete: "restrict" }),
     actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "restrict" }),
     action: text("action").notNull(),
     targetType: text("target_type"),
@@ -154,14 +173,7 @@ export const auditEvents = pgTable(
       .notNull()
       .default(sql`'{}'::jsonb`),
   },
-  (t) => [
-    foreignKey({
-      name: "audit_events_branch_fk",
-      columns: [t.schoolId, t.branchId],
-      foreignColumns: [branches.schoolId, branches.id],
-    }).onDelete("restrict"),
-    index("audit_events_school_id_occurred_at_idx").on(t.schoolId, t.occurredAt),
-  ],
+  (t) => [index("audit_events_occurred_at_idx").on(t.occurredAt)],
 );
 
 /**
@@ -176,10 +188,10 @@ export const sessions = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** School selected by the user; always re-validated against active membership on use. */
-    activeSchoolId: uuid("active_school_id").references(() => schools.id, { onDelete: "set null" }),
-    /** Optional branch filter inside the active school; validated against scope on every use. */
-    activeBranchId: uuid("active_branch_id"),
+    /** Optional branch filter; validated against the user's scope on every use. */
+    activeBranchId: uuid("active_branch_id").references(() => branches.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -194,7 +206,7 @@ export const sessions = pgTable(
   ],
 );
 
-/** Single-use password reset / account setup tokens, stored hashed. */
+/** Single-use password reset tokens, stored hashed. */
 export const passwordResetTokens = pgTable(
   "password_reset_tokens",
   {
@@ -213,91 +225,11 @@ export const passwordResetTokens = pgTable(
   ],
 );
 
-/** Fixed-window counters for rate limiting; shared by all app instances. */
-export const authRateLimits = pgTable("auth_rate_limits", {
-  key: text("key").primaryKey(),
-  count: integer("count").notNull(),
-  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
-});
-
-/** Stable permission codes, e.g. "users.invite". Defined by migrations, not by tenants. */
-export const permissions = pgTable("permissions", {
-  code: text("code").primaryKey(),
-  description: text("description").notNull(),
-});
-
-/** School-scoped roles. System roles are installed per school and cannot be edited. */
-export const roles = pgTable(
-  "roles",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    schoolId: uuid("school_id")
-      .notNull()
-      .references(() => schools.id, { onDelete: "restrict" }),
-    key: text("key").notNull(),
-    name: text("name").notNull(),
-    description: text("description").notNull().default(""),
-    isSystem: boolean("is_system").notNull().default(false),
-    ...timestamps,
-  },
-  (t) => [
-    unique("roles_school_id_key_key").on(t.schoolId, t.key),
-    unique("roles_school_id_id_key").on(t.schoolId, t.id),
-  ],
-);
-
-export const rolePermissions = pgTable(
-  "role_permissions",
-  {
-    schoolId: uuid("school_id").notNull(),
-    roleId: uuid("role_id").notNull(),
-    permissionCode: text("permission_code")
-      .notNull()
-      .references(() => permissions.code, { onDelete: "restrict" }),
-  },
-  (t) => [
-    primaryKey({ columns: [t.roleId, t.permissionCode] }),
-    foreignKey({
-      name: "role_permissions_role_fk",
-      columns: [t.schoolId, t.roleId],
-      foreignColumns: [roles.schoolId, roles.id],
-    }).onDelete("cascade"),
-  ],
-);
-
-/** Roles held by a membership. Both FKs include school_id, so roles cannot cross schools. */
-export const membershipRoles = pgTable(
-  "membership_roles",
-  {
-    schoolId: uuid("school_id").notNull(),
-    membershipId: uuid("membership_id").notNull(),
-    roleId: uuid("role_id").notNull(),
-    createdAt: timestamps.createdAt,
-  },
-  (t) => [
-    primaryKey({ columns: [t.membershipId, t.roleId] }),
-    foreignKey({
-      name: "membership_roles_membership_fk",
-      columns: [t.schoolId, t.membershipId],
-      foreignColumns: [schoolMemberships.schoolId, schoolMemberships.id],
-    }).onDelete("cascade"),
-    foreignKey({
-      name: "membership_roles_role_fk",
-      columns: [t.schoolId, t.roleId],
-      foreignColumns: [roles.schoolId, roles.id],
-    }).onDelete("restrict"),
-    index("membership_roles_school_id_role_id_idx").on(t.schoolId, t.roleId),
-  ],
-);
-
 /** Account-setup invitations. Only the SHA-256 hash of the emailed token is stored. */
 export const userInvitations = pgTable(
   "user_invitations",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    schoolId: uuid("school_id")
-      .notNull()
-      .references(() => schools.id, { onDelete: "restrict" }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -312,6 +244,13 @@ export const userInvitations = pgTable(
   },
   (t) => [
     unique("user_invitations_token_hash_key").on(t.tokenHash),
-    index("user_invitations_school_id_user_id_idx").on(t.schoolId, t.userId),
+    index("user_invitations_user_id_idx").on(t.userId),
   ],
 );
+
+/** Fixed-window counters for rate limiting; shared by all app instances. */
+export const authRateLimits = pgTable("auth_rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull(),
+  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+});

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { getCurrentSession, getRequestTenantContext } from "@/server/auth/request";
+import { getCurrentSession, getRequestAccess } from "@/server/auth/request";
 
-/** Current user and school context. Returns 401 without a valid session. */
+/** Current user and their access scope. Returns 401 without a valid session. */
 export async function GET(): Promise<NextResponse> {
   const session = await getCurrentSession();
   if (!session) {
@@ -11,11 +11,16 @@ export async function GET(): Promise<NextResponse> {
       { status: 401, headers: { "Cache-Control": "no-store" } },
     );
   }
-  const context = await getRequestTenantContext();
+  const access = await getRequestAccess();
   return NextResponse.json(
     {
       user: { id: session.userId, displayName: session.displayName, email: session.email },
-      school: context ? { id: context.schoolId, scope: context.scope.kind } : null,
+      access: access
+        ? {
+            scope: access.scope.kind,
+            branchIds: access.scope.kind === "branch" ? access.scope.branchIds : null,
+          }
+        : null,
     },
     { headers: { "Cache-Control": "no-store" } },
   );

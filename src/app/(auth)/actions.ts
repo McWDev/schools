@@ -15,7 +15,6 @@ import {
   getUserAgent,
   readSessionToken,
   setSessionCookie,
-  switchSchool,
 } from "@/server/auth/request";
 import { revokeSessionByToken } from "@/server/auth/sessions";
 import { getDatabase } from "@/server/db/client";
@@ -125,14 +124,6 @@ export async function resetPasswordAction(_prev: FormState, data: FormData): Pro
     throw error;
   }
   redirect("/login?reset=1");
-}
-
-export async function switchSchoolAction(data: FormData): Promise<void> {
-  const schoolId = field(data, "schoolId");
-  if (!z.uuid().safeParse(schoolId).success || !(await switchSchool(schoolId))) {
-    redirect("/dashboard?error=school");
-  }
-  redirect("/dashboard");
 }
 
 export async function acceptInvitationAction(_prev: FormState, data: FormData): Promise<FormState> {

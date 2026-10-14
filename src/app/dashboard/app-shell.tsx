@@ -5,19 +5,20 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/icons";
+import { ThemeToggle } from "@/components/theme";
 
 import { isActive, type NavGroup } from "./navigation";
 
 function Sidebar({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () => void }) {
   const pathname = usePathname();
   return (
-    <nav aria-label="Main" className="flex flex-col gap-6 px-3 py-4">
+    <nav aria-label="Main" className="flex flex-col gap-6 px-3 py-5">
       {groups.map((group) => (
         <div key={group.label}>
-          <p className="text-muted px-3 pb-1.5 text-xs font-semibold tracking-wide uppercase">
+          <p className="text-sidebar-muted px-3 pb-2 text-[11px] font-semibold tracking-[0.08em] uppercase">
             {group.label}
           </p>
-          <ul className="flex flex-col gap-0.5">
+          <ul className="flex flex-col gap-1">
             {group.items.map((item) => {
               const active = isActive(pathname, item.href);
               return (
@@ -26,13 +27,19 @@ function Sidebar({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () =
                     href={item.href}
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
-                    className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm ${
+                    className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                       active
-                        ? "bg-primary/10 text-primary font-semibold"
-                        : "text-foreground hover:bg-surface-muted"
+                        ? "bg-sidebar-active-bg text-sidebar-active font-semibold"
+                        : "text-sidebar-foreground hover:bg-sidebar-active-bg hover:text-sidebar-active"
                     }`}
                   >
-                    <Icon name={item.icon} />
+                    {active && (
+                      <span
+                        aria-hidden="true"
+                        className="bg-accent absolute top-1.5 bottom-1.5 left-0 w-1 rounded-full"
+                      />
+                    )}
+                    <Icon name={item.icon} className="size-[18px]" />
                     {item.label}
                   </Link>
                 </li>
@@ -45,16 +52,42 @@ function Sidebar({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () =
   );
 }
 
+function Brand({ schoolName }: { schoolName: string }) {
+  const initials = schoolName
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+  return (
+    <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
+      <span
+        aria-hidden="true"
+        className="from-hero-from to-hero-to grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-sm font-bold text-white shadow-md"
+      >
+        {initials || <Icon name="building" />}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold text-white">{schoolName}</span>
+        <span className="text-sidebar-muted block text-[11px] tracking-wide">
+          School Management
+        </span>
+      </span>
+    </Link>
+  );
+}
+
 /**
  * Responsive application frame: fixed sidebar on wide screens, an accessible drawer on small
  * screens (focus moves into it, Escape and route changes close it).
  */
 export function AppShell({
   groups,
+  schoolName,
   topBar,
   children,
 }: {
   groups: NavGroup[];
+  schoolName: string;
   topBar: ReactNode;
   children: ReactNode;
 }) {
@@ -83,16 +116,16 @@ export function AppShell({
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const brand = (
-    <Link href="/dashboard" className="flex items-center gap-2 text-sm font-semibold">
-      <span
-        aria-hidden="true"
-        className="bg-primary text-primary-foreground grid size-7 place-items-center rounded-md"
-      >
-        <Icon name="building" />
-      </span>
-      School Management
-    </Link>
+  const sidebarFooter = (
+    <div className="mt-auto border-t border-white/10 px-4 py-4">
+      <p className="text-sidebar-muted mb-2 text-[11px] font-semibold tracking-[0.08em] uppercase">
+        Appearance
+      </p>
+      {/* The toggle uses theme tokens; keep it legible on the dark sidebar in light mode too. */}
+      <div data-theme="dark" className="contents">
+        <ThemeToggle />
+      </div>
+    </div>
   );
 
   return (
@@ -104,9 +137,14 @@ export function AppShell({
         Skip to content
       </a>
 
-      <aside className="border-border bg-surface hidden w-64 shrink-0 flex-col border-r md:flex">
-        <div className="border-border flex h-14 items-center border-b px-5">{brand}</div>
-        <Sidebar groups={groups} />
+      <aside className="bg-sidebar sticky top-0 hidden h-dvh w-64 shrink-0 flex-col md:flex">
+        <div className="flex h-16 items-center border-b border-white/10 px-5">
+          <Brand schoolName={schoolName} />
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <Sidebar groups={groups} />
+        </div>
+        {sidebarFooter}
       </aside>
 
       {open && (
@@ -115,7 +153,7 @@ export function AppShell({
             type="button"
             aria-label="Close menu"
             tabIndex={-1}
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
             onClick={() => setOpen(false)}
           />
           <div
@@ -123,36 +161,37 @@ export function AppShell({
             role="dialog"
             aria-modal="true"
             aria-label="Navigation"
-            className="bg-surface absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col shadow-xl"
+            className="bg-sidebar absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col shadow-2xl"
           >
-            <div className="border-border flex h-14 items-center justify-between border-b px-4">
-              {brand}
+            <div className="flex h-16 items-center justify-between gap-2 border-b border-white/10 px-4">
+              <Brand schoolName={schoolName} />
               <button
                 ref={closeButton}
                 type="button"
                 onClick={() => setOpen(false)}
-                className="hover:bg-surface-muted rounded-md p-2"
+                className="text-sidebar-foreground rounded-lg p-2 hover:bg-white/10"
                 aria-label="Close navigation"
               >
                 <Icon name="close" className="size-5" />
               </button>
             </div>
-            <div className="overflow-y-auto">
+            <div className="flex-1 overflow-y-auto">
               <Sidebar groups={groups} onNavigate={() => setOpen(false)} />
             </div>
+            {sidebarFooter}
           </div>
         </div>
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-border bg-surface sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-3 sm:px-5">
+        <header className="border-border bg-surface/85 sticky top-0 z-30 flex h-16 items-center gap-2 border-b px-3 backdrop-blur-md sm:px-6">
           <button
             ref={menuButton}
             type="button"
             onClick={() => setOpen(true)}
             aria-expanded={open}
             aria-controls="mobile-nav"
-            className="hover:bg-surface-muted rounded-md p-2 md:hidden"
+            className="hover:bg-surface-muted rounded-lg p-2 md:hidden"
             aria-label="Open navigation"
           >
             <Icon name="menu" className="size-5" />
@@ -162,7 +201,7 @@ export function AppShell({
         <main
           id="main"
           tabIndex={-1}
-          className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:py-8"
+          className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
         >
           {children}
         </main>
@@ -209,13 +248,13 @@ export function MenuButton({
     <details ref={ref} className="relative">
       <summary
         aria-label={label}
-        className="hover:bg-surface-muted flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1.5 text-sm [&::-webkit-details-marker]:hidden"
+        className="border-border hover:bg-surface-muted flex cursor-pointer list-none items-center gap-2 rounded-lg border border-transparent px-2.5 py-1.5 text-sm transition-colors open:border-current/10 [&::-webkit-details-marker]:hidden"
       >
         {summary}
         <Icon name="chevron" className="text-muted size-4" />
       </summary>
       <div
-        className={`border-border bg-surface absolute z-40 mt-1 w-64 max-w-[calc(100vw-1.5rem)] rounded-lg border p-1 shadow-lg ${
+        className={`border-border bg-surface-raised absolute z-40 mt-2 w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border p-1.5 shadow-xl ${
           align === "end" ? "right-0" : "left-0"
         }`}
       >

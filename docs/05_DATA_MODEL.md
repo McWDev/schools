@@ -1,38 +1,39 @@
-# Initial Data Model (Conceptual)
+# Data Model
 
-This is a conceptual model, not a final SQL schema. Confirm field-level requirements during the relevant tasks.
+The live schema is `src/server/db/schema.ts`; migrations in `drizzle/` are authoritative. This page summarizes it and plans later tables.
 
-## Core entities
-- `schools`: tenant ID, name, slug, status, locale/timezone, created/updated timestamps.
-- `branches`: branch ID, school ID, name, code, status, address/contact fields, timestamps.
-- `users`: global login identity, normalized email/username, password/auth provider reference, status, profile photo reference, timestamps.
-- `school_memberships`: user ID, school ID, membership status, default scope.
-- `roles`: school-scoped or platform-scoped role definitions as appropriate.
-- `permissions`: stable permission codes.
-- `role_permissions`: role-to-permission mapping.
-- `membership_roles`: roles assigned to a membership.
-- `user_branch_assignments`: membership/user and branch assignments.
-- `sessions` / auth tables: based on selected authentication library.
-- `audit_events`: actor, school/branch context, action, target reference, timestamp, outcome, safe metadata.
-- `subscription_plans`: plan code, limits, feature flags, status.
-- `school_subscriptions`: school, plan, status, period, provider references if billing is enabled.
+## Core entities (built)
+| Table | Purpose |
+|---|---|
+| `school_settings` | The school's profile: name, short name, timezone, locale, and contacts. Exactly one row (`id = 1`). |
+| `branches` | Campuses: name, unique code, **area**, status, address, and contacts. |
+| `users` | Staff accounts: normalized email, name, status, **access scope** (`school` or `branch`), password hash, and photo key. |
+| `user_branches` | Branches a branch-scoped user works in. |
+| `permissions` | Stable permission codes, defined by migrations. |
+| `roles` / `role_permissions` | System roles and their permissions. |
+| `user_roles` | Roles held by each user. |
+| `user_invitations` | Hashed, single-use account-setup tokens. |
+| `sessions` | Hashed session tokens, expiry, revocation, and branch filter. |
+| `password_reset_tokens` | Hashed, single-use reset tokens. |
+| `auth_rate_limits` | Sign-in and reset counters, with hashed keys. |
+| `audit_events` | Append-only: actor, action, optional branch, target, outcome, and safe metadata. |
 
 ## Academic entities (later tasks)
-- `academic_years`, `terms`
-- `grade_levels`, `classes`, `sections`
-- `students`, `student_guardians`, `student_branch_history`
-- `staff`, `teacher_assignments`
+Every branch-scoped table carries `branch_id` (an FK to `branches`):
+- `academic_years`, `terms` (school-wide)
+- `grade_levels` (school-wide); `classes`, `sections` (per branch)
+- `students` (current `branch_id`, school-wide unique student number), `student_guardians`, `student_branch_history`
+- `staff_profiles`, `teacher_assignments`
 - `subjects`, `class_subjects`, `timetables`
 - `attendance_sessions`, `attendance_records`, `attendance_corrections`
 - `exams`, `assessment_components`, `marks`, `grading_scales`, `report_cards`
 - `fee_structures`, `student_invoices`, `payments`, `receipts`, `discounts`
 
 ## Data integrity rules
-- Every tenant-owned entity includes `school_id`, directly or through a rigorously enforced parent relationship.
-- Branch-scoped entities include `branch_id` and enforce that the branch belongs to the same school.
-- Prefer stable internal UUIDs for primary keys and human-readable numbers/codes as separate fields.
-- Unique constraints should state their scope, e.g. student number unique per school, not necessarily globally.
-- Use soft deactivation for records with history; do not cascade-delete financial, attendance, marks, or audit history.
-- Define update/delete behavior explicitly for each foreign key.
-- Timestamps should be stored consistently (normally UTC) and displayed in the school's configured timezone.
+- Branch-scoped entities include `branch_id` and are filtered by the user's branches; RLS enforces the same rule.
+- Use stable internal UUIDs for primary keys, with human-readable numbers and codes as separate unique fields.
+- Unique constraints state their scope explicitly (for example, student number unique school-wide, class name unique per branch and academic year).
+- Use soft deactivation for records with history. Never cascade-delete financial, attendance, marks, or audit history.
+- Define update/delete behaviour explicitly for each foreign key.
+- Store timestamps in UTC and display them in the school's timezone.
 - Do not store derived totals as authoritative unless there is a documented reconciliation strategy.

@@ -38,15 +38,14 @@ The in-house design keeps identity, sessions, and audit in our own database unde
   - Logout revokes the session row.
   - A password reset revokes all of the user's sessions.
   - Suspending or deactivating a user invalidates their sessions on the next request.
-  - Switching school rotates the session token.
-- **Tenant context.** It is resolved server-side from the session's stored `active_school_id`, and active membership is re-validated on every request (`getRequestTenantContext`). The browser never supplies a school ID that is trusted.
+- **Access context.** The user's scope, branches, and permissions are resolved server-side from the session on every request (`getRequestAccess`). The browser never supplies a trusted scope or branch; a selected branch filter is stored on the session and re-validated each time.
 - **Proxy.** `src/proxy.ts` only redirects requests that have no cookie. All real checks happen in server code.
 
-## First platform administrator
+## First school administrator (first-run setup)
 ```bash
-npm run auth:bootstrap-admin -- --email ops@yourdomain --name "Platform Admin"
+npm run setup -- --school "Falkaab School" --email admin@yourdomain --name "Head Teacher" --timezone Africa/Mogadishu
 ```
-This creates the account without a password and prints a single-use setup link, valid for 60 minutes, exactly once. It refuses to run if any platform administrator exists. There is no default password anywhere.
+This names the school, creates the first school administrator without a password, and prints a single-use setup link (`/accept-invitation`), valid for 60 minutes, exactly once. It refuses to run if a school administrator already exists. There is no default password anywhere.
 
 ## Deployment requirements
 - `APP_URL` must be the public `https://` origin. This enables Secure / `__Host-` cookies.
@@ -54,6 +53,6 @@ This creates the account without a password and prints a single-use setup link, 
 - `EMAIL_TRANSPORT` defaults to `disabled` in production until a provider is configured (Task 017). Password-reset emails cannot be sent before then.
 
 ## Follow-ups
-- **MFA** is required for platform super administrators before production. It is planned with platform admin operations (Task 019) and must ship before Task 021.
+- **MFA** is required for school administrators before production. It is planned with system administration (Task 019) and must ship before Task 021.
 - Expired rate-limit and session rows should be pruned by a scheduled job (Task 018).
-- Re-authentication for high-risk actions comes with the first such action (Task 003: role changes).
+- Re-authentication for high-risk actions is in place for role, access, and status changes (Task 003).

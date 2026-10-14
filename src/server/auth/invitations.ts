@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "@/server/db/client";
 import { users } from "@/server/db/schema";
-import { recordPlatformAudit } from "@/server/modules/audit/record";
+import { recordAudit } from "@/server/modules/audit/record";
 
 import { AUTH_POLICY } from "./config";
 import { AuthValidationError } from "./errors";
@@ -37,8 +37,8 @@ export async function acceptInvitation(
   const passwordHash = await hashPassword(parsed.data);
 
   return db.transaction(async (tx) => {
-    const consumed = await tx.execute<{ user_id: string; school_id: string }>(
-      sql`select user_id, school_id from app.consume_invitation(${hashToken(input.token)})`,
+    const consumed = await tx.execute<{ user_id: string }>(
+      sql`select user_id from app.consume_invitation(${hashToken(input.token)})`,
     );
     const invitation = consumed.rows[0];
     if (!invitation) return { ok: false, reason: "invalid_token" } as const;
@@ -54,11 +54,11 @@ export async function acceptInvitation(
       return { ok: false, reason: "already_active" } as const;
     }
 
-    await recordPlatformAudit(tx, {
+    await recordAudit(tx, {
       action: "user.invite.accept",
       actorUserId: activated.id,
-      targetType: "school",
-      targetId: invitation.school_id,
+      targetType: "user",
+      targetId: activated.id,
     });
     return { ok: true, userId: activated.id } as const;
   });

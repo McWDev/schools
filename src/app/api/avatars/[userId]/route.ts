@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-import { getCurrentSession, getRequestTenantContext } from "@/server/auth/request";
+import { getCurrentSession, getRequestAccess } from "@/server/auth/request";
 import { getDatabase } from "@/server/db/client";
 import { users } from "@/server/db/schema";
 import { getVisibleAvatarKey } from "@/server/modules/users/service";
@@ -34,8 +34,8 @@ export async function GET(
       .where(eq(users.id, session.userId));
     key = row?.key ?? null;
   } else {
-    const context = await getRequestTenantContext();
-    key = context ? await getVisibleAvatarKey(db, context, userId) : null;
+    const access = await getRequestAccess();
+    key = access ? await getVisibleAvatarKey(db, access, userId) : null;
   }
   if (!key) return notFound();
 

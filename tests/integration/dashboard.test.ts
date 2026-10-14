@@ -1,76 +1,51 @@
-import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import { SYNTHETIC as t } from "../../scripts/lib/synthetic-tenants";
+import { SYNTHETIC as t } from "../../scripts/lib/synthetic-school";
+import { listSelectableBranches, resolveBranchFilter } from "@/server/access/branch-filter";
+import { resolveAccessContext, type AccessContext } from "@/server/access/context";
+import { ForbiddenError } from "@/server/access/errors";
 import { getDatabase } from "@/server/db/client";
-import { getDashboardSummary, getPlatformOverview } from "@/server/modules/dashboard/service";
-import { listSelectableBranches, resolveBranchFilter } from "@/server/tenancy/branch-filter";
-import { resolveTenantContext, type TenantContext } from "@/server/tenancy/context";
-import { ForbiddenError } from "@/server/tenancy/errors";
+import { getDashboardSummary } from "@/server/modules/dashboard/service";
 
-import { closeOwner, ownerQuery, resetTenants } from "./helpers";
+import { closeOwner, ownerQuery, resetSchool } from "./helpers";
 
 const db = getDatabase();
-let adminA: TenantContext;
-let teacherA1: TenantContext;
-let branchAdminA1: TenantContext;
-let adminB: TenantContext;
+let admin: AccessContext;
+let mainTeacher: AccessContext;
+let mainBranchAdmin: AccessContext;
 
 beforeEach(async () => {
-  await resetTenants();
-  [adminA, teacherA1, branchAdminA1, adminB] = await Promise.all([
-    resolveTenantContext(db, { userId: t.users.adminA, schoolId: t.schoolA.id }),
-    resolveTenantContext(db, { userId: t.users.teacherA1, schoolId: t.schoolA.id }),
-    resolveTenantContext(db, { userId: t.users.branchAdminA1, schoolId: t.schoolA.id }),
-    resolveTenantContext(db, { userId: t.users.adminB, schoolId: t.schoolB.id }),
-  ]);
+  await resetSchool();
+  [admin, mainTeacher, mainBranchAdmin] = await Promise.all(
+    [t.users.admin, t.users.mainTeacher, t.users.mainBranchAdmin].map((id) =>
+      resolveAccessContext(db, id),
+    ),
+  );
 });
 
 afterAll(closeOwner);
 
 describe("branch selection", () => {
-  it("lists every branch for school admins and only assigned branches for branch users", async () => {
-    expect((await listSelectableBranches(db, adminA)).map((b) => b.code)).toEqual([
-      "A-MAIN",
-      "A-NORTH",
+  it("lists every branch for school admins and only assigned branches for branch staff", async () => {
+    expect((await listSelectableBranches(db, admin)).map((b) => [b.code, b.area])).toEqual([
+      ["MAIN", "Central"],
+      ["NORTH", "North"],
     ]);
-    expect((await listSelectableBranches(db, teacherA1)).map((b) => b.code)).toEqual(["A-MAIN"]);
-    expect((await listSelectableBranches(db, adminB)).map((b) => b.code)).toEqual(["B-MAIN"]);
+    expect((await listSelectableBranches(db, mainTeacher)).map((b) => b.code)).toEqual(["MAIN"]);
   });
 
-  it("refuses unassigned branches, other schools' branches, and malformed IDs", async () => {
-    expect(await resolveBranchFilter(db, adminA, t.schoolA.branchA2)).toMatchObject({
-      code: "A-NORTH",
-    });
-    expect(await resolveBranchFilter(db, teacherA1, t.schoolA.branchA2)).toBeNull();
-    expect(await resolveBranchFilter(db, adminA, t.schoolB.branchB1)).toBeNull();
-    expect(await resolveBranchFilter(db, adminA, "not-a-uuid' or 1=1 --")).toBeNull();
-  });
-
-  it("the database rejects a session branch that belongs to a different school", async () => {
-    const [session] = await ownerQuery<{ id: string }>(
-      `insert into sessions (token_hash, user_id, active_school_id, expires_at)
-       values (repeat('a', 64), $1, $2, now() + interval '1 day') returning id`,
-      [t.users.adminA, t.schoolA.id],
-    );
-    await expect(
-      ownerQuery(`update sessions set active_branch_id = $1 where id = $2`, [
-        t.schoolB.branchB1,
-        session.id,
-      ]),
-    ).rejects.toThrow(/sessions_active_branch_fk/);
-    await expect(
-      ownerQuery(
-        `update sessions set active_school_id = null, active_branch_id = $1 where id = $2`,
-        [t.schoolA.branchA1, session.id],
-      ),
-    ).rejects.toThrow(/sessions_branch_requires_school/);
+  it("refuses unassigned branches, inactive branches, and malformed IDs", async () => {
+    expect(await resolveBranchFilter(db, admin, t.branches.north)).toMatchObject({ code: "NORTH" });
+    expect(await resolveBranchFilter(db, mainTeacher, t.branches.north)).toBeNull();
+    expect(await resolveBranchFilter(db, admin, "not-a-uuid' or 1=1 --")).toBeNull();
+    await ownerQuery(`update branches set status = 'inactive' where id = $1`, [t.branches.north]);
+    expect(await resolveBranchFilter(db, admin, t.branches.north)).toBeNull();
   });
 });
 
 describe("dashboard summary", () => {
-  it("school admin sees branch, staff, and activity figures for their school only", async () => {
-    const summary = await getDashboardSummary(db, adminA, null);
+  it("school admin sees branch, staff, and activity figures", async () => {
+    const summary = await getDashboardSummary(db, admin, null);
     expect(summary.myRoles).toEqual(["School administrator"]);
     expect(summary.branches).toEqual({ active: 2 });
     expect(summary.staff).toEqual({ active: 4, pendingInvitations: 0, noAccess: 0 });
@@ -78,72 +53,54 @@ describe("dashboard summary", () => {
   });
 
   it("narrows figures to a selected branch", async () => {
-    const summary = await getDashboardSummary(db, adminA, t.schoolA.branchA2);
-    expect(summary.branch).toMatchObject({ code: "A-NORTH" });
+    const summary = await getDashboardSummary(db, admin, t.branches.north);
+    expect(summary.branch).toMatchObject({ code: "NORTH" });
     expect(summary.branches).toEqual({ active: 1 });
-    // Only school-wide staff (admin A and the multi-school user) cover A-NORTH.
+    // School-wide admin plus the North teacher cover North Campus.
     expect(summary.staff?.active).toBe(2);
   });
 
+  it("counts invited and deactivated staff separately", async () => {
+    await ownerQuery(`update users set status = 'invited' where id = $1`, [t.users.northTeacher]);
+    await ownerQuery(`update users set status = 'deactivated' where id = $1`, [
+      t.users.mainTeacher,
+    ]);
+    expect((await getDashboardSummary(db, admin, null)).staff).toEqual({
+      active: 2,
+      pendingInvitations: 1,
+      noAccess: 1,
+    });
+  });
+
   it("a teacher gets only their own access, no staff or activity data", async () => {
-    const summary = await getDashboardSummary(db, teacherA1, null);
+    const summary = await getDashboardSummary(db, mainTeacher, null);
     expect(summary.myRoles).toEqual(["Teacher"]);
     expect(summary.branches).toEqual({ active: 1 });
     expect(summary.staff).toBeUndefined();
     expect(summary.recentActivity).toBeUndefined();
   });
 
-  it("branch admin staff figures cover only members inside their branches", async () => {
-    const summary = await getDashboardSummary(db, branchAdminA1, null);
+  it("branch admin staff figures cover only people inside their branches", async () => {
+    const summary = await getDashboardSummary(db, mainBranchAdmin, null);
     expect(summary.staff?.active).toBe(2);
     expect(summary.recentActivity).toBeUndefined();
   });
 
-  it("refuses dashboard data for a branch outside the user's scope or school", async () => {
-    await expect(getDashboardSummary(db, teacherA1, t.schoolA.branchA2)).rejects.toThrow(
-      ForbiddenError,
-    );
-    await expect(getDashboardSummary(db, adminA, t.schoolB.branchB1)).rejects.toThrow(
+  it("refuses dashboard data for a branch outside the user's scope", async () => {
+    await expect(getDashboardSummary(db, mainTeacher, t.branches.north)).rejects.toThrow(
       ForbiddenError,
     );
   });
 
-  it("recent activity shows this school's events only", async () => {
+  it("recent activity shows administrative events, not sign-ins", async () => {
     await ownerQuery(
-      `insert into audit_events (school_id, actor_user_id, action, outcome) values
-       ($1, $2, 'user.invite', 'success'), ($3, $4, 'user.invite', 'success'), (null, $2, 'auth.login', 'success')`,
-      [t.schoolA.id, t.users.adminA, t.schoolB.id, t.users.adminB],
+      `insert into audit_events (actor_user_id, action, outcome) values
+       ($1, 'user.invite', 'success'), ($1, 'auth.login', 'success'), ($1, 'profile.update', 'success')`,
+      [t.users.admin],
     );
-    const summary = await getDashboardSummary(db, adminA, null);
+    const summary = await getDashboardSummary(db, admin, null);
     expect(summary.recentActivity?.map((e) => [e.actorName, e.action])).toEqual([
-      ["Admin A", "user.invite"],
+      ["School Admin", "user.invite"],
     ]);
-  });
-});
-
-describe("platform overview", () => {
-  it("platform admins get aggregate counts; everyone else gets nothing", async () => {
-    await ownerQuery(`update schools set status = 'suspended' where id = $1`, [t.schoolB.id]);
-    expect(
-      await getPlatformOverview(db, { userId: t.users.platformAdmin, isPlatformAdmin: true }),
-    ).toEqual({
-      total: 2,
-      byStatus: { active: 1, suspended: 1 },
-    });
-    expect(
-      await getPlatformOverview(db, { userId: t.users.adminA, isPlatformAdmin: false }),
-    ).toBeNull();
-  });
-
-  it("the database function ignores a forged platform flag for a non-admin user", async () => {
-    // Even if application code were tricked into calling it, the function checks the user row.
-    expect(
-      await getPlatformOverview(db, { userId: t.users.adminA, isPlatformAdmin: true }),
-    ).toEqual({
-      total: 0,
-      byStatus: {},
-    });
-    const direct = await db.execute(sql`select * from app.platform_school_counts()`);
-    expect(direct.rows).toEqual([]);
   });
 });

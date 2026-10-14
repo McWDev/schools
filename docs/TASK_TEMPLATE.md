@@ -18,7 +18,7 @@ State the user-visible and technical outcome.
 1. Inspect the current project state; do not overwrite working code blindly.
 2. Implement the smallest complete slice.
 3. Add/update migrations if schema changes are needed.
-4. Add automated tests, including authorization and tenant-boundary tests where relevant.
+4. Add automated tests, including authorization and branch-scope tests where relevant.
 5. Update documentation.
 
 ## Acceptance criteria

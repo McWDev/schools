@@ -7,10 +7,9 @@ test.beforeEach(resetData);
 
 test.describe("role-aware navigation", () => {
   const cases: [string, string, string[]][] = [
-    ["school admin", "admin.a@example.test", ["Dashboard", "Users", "My profile"]],
-    ["branch admin", "branch.admin.a1@example.test", ["Dashboard", "Users", "My profile"]],
-    ["teacher", "teacher.a1@example.test", ["Dashboard", "My profile"]],
-    ["platform admin", "platform@example.test", ["Dashboard", "Platform overview", "My profile"]],
+    ["school admin", "admin@example.test", ["Dashboard", "Users", "My profile"]],
+    ["branch admin", "main.admin@example.test", ["Dashboard", "Users", "My profile"]],
+    ["teacher", "main.teacher@example.test", ["Dashboard", "My profile"]],
   ];
   for (const [role, email, expected] of cases) {
     test(`${role} sees the right navigation`, async ({ page }) => {
@@ -21,7 +20,7 @@ test.describe("role-aware navigation", () => {
   }
 
   test("marks the current page in the navigation", async ({ page }) => {
-    await signIn(page, "admin.a@example.test");
+    await signIn(page, "admin@example.test");
     await page
       .getByRole("navigation", { name: "Main" })
       .getByRole("link", { name: "Users" })
@@ -31,50 +30,33 @@ test.describe("role-aware navigation", () => {
       "page",
     );
   });
-
-  test("platform admin sees aggregate school counts only", async ({ page }) => {
-    await signIn(page, "platform@example.test");
-    await page.getByRole("link", { name: "Platform overview" }).click();
-    await expect(page.getByRole("heading", { name: "Schools by status" })).toBeVisible();
-    await expect(page.getByText("Example Academy A")).toHaveCount(0);
-  });
-
-  test("non-platform users get no access on the platform page", async ({ page }) => {
-    await signIn(page, "admin.a@example.test");
-    await page.goto("/dashboard/platform");
-    await expect(
-      page.getByRole("heading", { name: "You don't have access to this page" }),
-    ).toBeVisible();
-  });
 });
 
 test.describe("branch context", () => {
   test("school admin switches between branches and back", async ({ page }) => {
-    await signIn(page, "admin.a@example.test");
-    await expect(page.getByText("Current school: Example Academy A · All branches")).toBeVisible();
+    await signIn(page, "admin@example.test");
+    await expect(page.getByText("Example Academy · All branches")).toBeVisible();
     await expect(page.getByText("Active branches")).toBeVisible();
 
     await page.getByLabel(/^Branch: All branches/).click();
-    await page.getByRole("button", { name: /A North Campus/ }).click();
-    await expect(
-      page.getByText("Current school: Example Academy A · A North Campus"),
-    ).toBeVisible();
+    await page.getByRole("button", { name: /North Campus/ }).click();
+    await expect(page.getByText("Example Academy · North Campus")).toBeVisible();
     await expect(page.getByText("Selected branch")).toBeVisible();
 
-    await page.getByLabel(/^Branch: A North Campus/).click();
+    await page.getByLabel(/^Branch: North Campus/).click();
     await page.getByRole("button", { name: /^All branches/ }).click();
-    await expect(page.getByText("Current school: Example Academy A · All branches")).toBeVisible();
+    await expect(page.getByText("Example Academy · All branches")).toBeVisible();
   });
 
   test("branch user can only choose an assigned branch", async ({ page }) => {
-    await signIn(page, "teacher.a1@example.test");
+    await signIn(page, "main.teacher@example.test");
     await page.getByLabel(/^Branch:/).click();
-    await expect(page.getByRole("button", { name: /A Main Campus/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /A North Campus/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Main Campus/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /North Campus/ })).toHaveCount(0);
   });
 
   test("teacher dashboard shows their access and no staff figures", async ({ page }) => {
-    await signIn(page, "teacher.a1@example.test");
+    await signIn(page, "main.teacher@example.test");
     await expect(page.getByText("Your access")).toBeVisible();
     await expect(page.getByText("Teacher", { exact: true })).toBeVisible();
     await expect(page.getByText("Staff with access")).toHaveCount(0);
@@ -92,7 +74,7 @@ async function expectNoHorizontalOverflow(page: Page) {
 test.describe("responsive layout", () => {
   test("mobile: drawer navigation, no horizontal overflow", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await signIn(page, "admin.a@example.test");
+    await signIn(page, "admin@example.test");
     await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
     await expectNoHorizontalOverflow(page);
 
@@ -116,7 +98,7 @@ test.describe("responsive layout", () => {
   ] as const) {
     test(`${name}: core pages fit the viewport`, async ({ page }) => {
       await page.setViewportSize({ width, height });
-      await signIn(page, "admin.a@example.test");
+      await signIn(page, "admin@example.test");
       for (const path of ["/dashboard", "/dashboard/users", "/dashboard/profile"]) {
         await page.goto(path);
         await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -143,7 +125,7 @@ test.describe("accessibility", () => {
   });
 
   test("signed-in pages have no serious accessibility violations", async ({ page }) => {
-    await signIn(page, "admin.a@example.test");
+    await signIn(page, "admin@example.test");
     for (const path of [
       "/dashboard",
       "/dashboard/users",
@@ -157,7 +139,7 @@ test.describe("accessibility", () => {
   });
 
   test("keyboard users can skip straight to the content", async ({ page }) => {
-    await signIn(page, "admin.a@example.test");
+    await signIn(page, "admin@example.test");
     // A fresh page load, as a keyboard user arrives: the first Tab reaches the skip link.
     await page.goto("/dashboard");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -166,5 +148,52 @@ test.describe("accessibility", () => {
     await expect(skip).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/#main$/);
+  });
+});
+
+test.describe("appearance", () => {
+  test("dark mode can be chosen, is remembered, and can be switched back", async ({ page }) => {
+    await signIn(page, "admin@example.test");
+    const sidebar = page.getByRole("complementary");
+    await sidebar.getByRole("radio", { name: /Dark/ }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(sidebar.getByRole("radio", { name: /Dark/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await sidebar.getByRole("radio", { name: /Light/ }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  });
+
+  test("follows the operating system when set to System", async ({ browser }) => {
+    const context = await browser.newContext({ colorScheme: "dark" });
+    const page = await context.newPage();
+    await page.goto("/login");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await context.close();
+  });
+
+  test("dark mode has no serious accessibility violations", async ({ browser }) => {
+    const context = await browser.newContext({ colorScheme: "dark" });
+    const page = await context.newPage();
+    await page.goto("/login");
+    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    let results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(
+      results.violations
+        .filter((v) => v.impact === "serious" || v.impact === "critical")
+        .map((v) => v.id),
+    ).toEqual([]);
+    await signIn(page, "admin@example.test");
+    await expect(page.getByText("Your access")).toBeVisible();
+    results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(
+      results.violations
+        .filter((v) => v.impact === "serious" || v.impact === "critical")
+        .map((v) => v.id),
+    ).toEqual([]);
+    await context.close();
   });
 });

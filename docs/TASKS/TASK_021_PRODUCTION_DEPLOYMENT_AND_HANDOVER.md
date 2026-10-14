@@ -9,7 +9,7 @@ Production configuration, secure admin bootstrap, migration release, monitoring,
 ## Acceptance criteria
 - [ ] Production secrets are managed outside source control.
 - [ ] Production database and application are separated from staging.
-- [ ] Smoke tests and tenant-isolation tests pass after deployment.
+- [ ] Smoke tests and access-control tests pass after deployment.
 - [ ] Monitoring and alert routing are verified.
 - [ ] Backup restoration has been demonstrated.
 - [ ] Rollback and incident response instructions are available.

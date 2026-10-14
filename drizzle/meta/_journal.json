@@ -57,6 +57,13 @@
       "when": 1792009851818,
       "tag": "0007_shell_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792011571387,
+      "tag": "0008_single_school",
+      "breakpoints": true
     }
   ]
 }

@@ -19,9 +19,10 @@ src/
   components/          Shared UI components and design tokens
   lib/                 Cross-cutting utilities (env, logging, errors)
   server/
-    db/                Drizzle client, schema, tenant-scoped query helpers
+    access/            Access context (scope, branches, permissions), branch filter, school profile
+    db/                Drizzle client and schema
     auth/              Session and identity
-    modules/<domain>/  Business services per domain (tenants, branches, students, ...)
+    modules/<domain>/  Business services per domain (branches, users, students, ...)
 tests/                 Integration, security regression, and e2e suites
 drizzle/               Generated SQL migrations (reviewed, committed)
 docs/                  Product and engineering documentation (Markdown only)

@@ -1,5 +1,7 @@
 # Evidence: Task 001, SaaS Tenancy Foundation and Database Isolation
 
+> **Historical record.** Recorded before redesign R1, which replaced the multi-school (SaaS) model with a single-school model. Names such as schools, memberships, School A/B, and the platform admin no longer exist. See [REDESIGN_R1](REDESIGN_R1.md).
+
 Date: 2026-10-14 · Branch: `task/001-tenancy-foundation`
 
 ## What was built

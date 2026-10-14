@@ -13,8 +13,6 @@ export interface SessionUser {
   userId: string;
   email: string;
   displayName: string;
-  isPlatformAdmin: boolean;
-  activeSchoolId: string | null;
   activeBranchId: string | null;
 }
 
@@ -48,8 +46,6 @@ export async function validateSession(db: Database, token: string): Promise<Sess
       userId: users.id,
       email: users.email,
       displayName: users.displayName,
-      isPlatformAdmin: users.isPlatformAdmin,
-      activeSchoolId: sessions.activeSchoolId,
       activeBranchId: sessions.activeBranchId,
       needsTouch: sql<boolean>`${sessions.lastSeenAt} < now() - ${seconds(AUTH_POLICY.sessionTouchIntervalSeconds)}`,
     })
@@ -103,46 +99,8 @@ export async function revokeUserSessions(
 }
 
 /**
- * Store the selected school and issue a fresh token, so a token captured before the context
- * change cannot be replayed afterwards. The caller must have validated the membership first.
- */
-export async function switchSessionSchool(
-  db: Database,
-  sessionId: string,
-  schoolId: string,
-): Promise<string> {
-  const token = generateToken();
-  await db
-    .update(sessions)
-    .set({
-      activeSchoolId: schoolId,
-      activeBranchId: null,
-      tokenHash: hashToken(token),
-      lastSeenAt: sql`now()`,
-    })
-    .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)));
-  return token;
-}
-
-/**
- * Record an automatically chosen school (the user has exactly one) so later requests skip the
- * school lookup. Membership is still re-validated on every request, so no token rotation is needed.
- */
-export async function rememberSessionSchool(
-  db: Database,
-  sessionId: string,
-  schoolId: string,
-): Promise<void> {
-  await db
-    .update(sessions)
-    .set({ activeSchoolId: schoolId })
-    .where(and(eq(sessions.id, sessionId), isNull(sessions.activeSchoolId)));
-}
-
-/**
  * Store the branch filter (null = all branches in scope). The caller must have validated that
- * the branch is in the session school and inside the user scope; a composite foreign key also
- * guarantees it belongs to the active school.
+ * the branch is active and inside the user scope.
  */
 export async function setSessionBranch(
   db: Database,

@@ -12,4 +12,4 @@ Fee structures, invoices, payments, receipts, discounts/waivers, arrears, paymen
 - [ ] Receipts have controlled unique numbers within the agreed scope.
 - [ ] Refunds and corrections are permissioned and audited.
 - [ ] No payment card details are stored directly.
-- [ ] Financial exports are tenant-scoped and permissioned.
+- [ ] Financial exports are branch-scoped and permissioned.

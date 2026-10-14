@@ -1,28 +1,29 @@
-# School Management SaaS — Documentation Package
+# School Management System — Documentation
 
 ## Purpose
-This package defines the product, architecture, security rules, and sequential build-and-test tasks for a multi-tenant School Management System (SMS).
+This package defines the product, architecture, security rules, and sequential build-and-test tasks for a School Management System (SMS) for **one school with many branches** in different areas.
 
-**Stack:** Node.js runtime, Next.js + TypeScript, Neon PostgreSQL.  
-**Product model:** SaaS platform hosting multiple independent schools. Each school can create and manage sub-branches/campuses. School-level administrators can oversee all branches belonging to their school; branch staff are restricted to their assigned branch unless explicitly granted wider access.
+**Stack:** Node.js 24, Next.js 16 + TypeScript, Neon PostgreSQL.
+**Product model:** each installation serves one school with its own database. The school runs several branches (campuses). School-wide administrators oversee every branch; branch staff are limited to their assigned branches unless explicitly granted wider access.
 
 ## How to use this package
-1. Read `01_PRODUCT_REQUIREMENTS.md`, `02_TENANCY_AND_ACCESS_MODEL.md`, `03_SECURITY_REQUIREMENTS.md`, and `04_ARCHITECTURE.md`.
+1. Read `01_PRODUCT_REQUIREMENTS.md`, `02_ACCESS_MODEL.md`, `03_SECURITY_REQUIREMENTS.md`, and `04_ARCHITECTURE.md`.
 2. Review `05_DATA_MODEL.md` and `06_UI_UX_GUIDELINES.md`.
 3. Follow `TASKS/` in numeric order. Do not start the next task until the current task's acceptance criteria and tests pass.
-4. Keep all project documentation in Markdown (`.md`). Source code, configuration, migrations, and automated tests will still need their normal file types when the actual application is built; this requirement applies to this documentation package.
-5. Use `TASK_TEMPLATE.md` for each future task and record evidence in `TEST_AND_RELEASE_GATES.md`.
+4. Keep all project documentation in Markdown (`.md`).
+5. Use `TASK_TEMPLATE.md` for each task and record evidence in `evidence/TASK_NNN.md`.
 
 ## Important implementation rule
 A written plan cannot guarantee that a system has no bugs or security vulnerabilities. Security must be enforced in server-side code and database access patterns, then verified through automated tests, review, and staged deployment. Never treat a hidden UI element as an access-control mechanism.
 
 ## Task sequence
 - Task 000 — repository, tooling, coding standards, and environment baseline
-- Task 001 — SaaS tenancy foundation and database isolation
+- Task 001 — data foundation and access isolation
 - Task 002 — authentication, login, logout, password recovery, and session security
 - Task 003 — user management, roles, permissions, invitations, and profile photos
 - Task 004 — professional dashboard shell and navigation
-- Task 005 — school tenant onboarding and subscription-ready plan model
+- **Redesign R1 — single-school model (removed SaaS multi-tenancy)**
+- Task 005 — school profile and settings
 - Task 006 — branch/campus management
 - Task 007 — academic year, terms, grades, classes, and sections
 - Task 008 — student admissions and student records
@@ -36,13 +37,13 @@ A written plan cannot guarantee that a system has no bugs or security vulnerabil
 - Task 016 — reports, exports, and dashboards
 - Task 017 — notifications and messaging
 - Task 018 — audit logs, backups, retention, and data export
-- Task 019 — SaaS super-admin operations, plans, quotas, and billing integration
+- Task 019 — system administration, configuration, and MFA
 - Task 020 — end-to-end security, accessibility, performance, and acceptance testing
 - Task 021 — production deployment, monitoring, backup restore drill, and handover
 
 ## Documentation index
 - `01_PRODUCT_REQUIREMENTS.md`
-- `02_TENANCY_AND_ACCESS_MODEL.md`
+- `02_ACCESS_MODEL.md`
 - `03_SECURITY_REQUIREMENTS.md`
 - `04_ARCHITECTURE.md`
 - `05_DATA_MODEL.md`
@@ -50,5 +51,11 @@ A written plan cannot guarantee that a system has no bugs or security vulnerabil
 - `07_TEST_AND_RELEASE_GATES.md`
 - `08_DEPLOYMENT_AND_OPERATIONS.md`
 - `09_DECISIONS_AND_OPEN_QUESTIONS.md`
+- `10_REPOSITORY_CONVENTIONS.md`
+- `11_ACCESS_CONTROL_IMPLEMENTATION.md`
+- `12_AUTHENTICATION.md`
+- `13_USERS_AND_PERMISSIONS.md`
+- `PROGRESS.md` — task status
 - `TASK_TEMPLATE.md`
-- `TASKS/` — one Markdown brief per implementation task
+- `TASKS/` — one brief per implementation task
+- `evidence/` — test evidence per task

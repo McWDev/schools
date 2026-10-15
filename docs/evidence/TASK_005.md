@@ -39,3 +39,5 @@ Date: 2026-10-14 · Branch: `task/005-school-settings`
 
 ## Notes
 - The development database's school is renamed "Wadajir Primary & Secondary School" to demonstrate the panel. Change it any time in School settings.
+
+- CI passed: https://github.com/McWDev/schools/actions/runs/38677022413 (after the build-time route fix in 350b709)

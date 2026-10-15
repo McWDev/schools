@@ -21,6 +21,7 @@ describe("buildNavigation", () => {
   it("school admin sees users", () => {
     expect(labels(buildNavigation(SCHOOL_ADMIN))).toEqual([
       "Dashboard",
+      "Branches",
       "Users",
       "School settings",
       "My profile",
@@ -33,8 +34,12 @@ describe("buildNavigation", () => {
     expect(nav).not.toContain("School settings");
   });
 
-  it("teacher sees only the dashboard and their profile", () => {
-    expect(labels(buildNavigation(["branches.read"]))).toEqual(["Dashboard", "My profile"]);
+  it("teacher sees the dashboard, their branches, and their profile", () => {
+    expect(labels(buildNavigation(["branches.read"]))).toEqual([
+      "Dashboard",
+      "Branches",
+      "My profile",
+    ]);
   });
 
   it("drops groups that end up empty", () => {

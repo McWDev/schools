@@ -12,7 +12,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run lint && npm run format:check && npm run typecheck && npm run test && npm run build && npm run check:bundle",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run test && npm run build:ci && npm run check:bundle",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "check:bundle": "node scripts/check-client-bundle.mjs",
@@ -21,7 +21,8 @@
     "db:seed": "tsx --conditions=react-server scripts/seed-dev.ts",
     "db:rotate-runtime-password": "tsx --conditions=react-server scripts/rotate-runtime-password.ts",
     "test:e2e": "playwright test",
-    "setup": "tsx --conditions=react-server scripts/setup-school.ts"
+    "setup": "tsx --conditions=react-server scripts/setup-school.ts",
+    "build:ci": "node scripts/build-like-ci.mjs"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.2",

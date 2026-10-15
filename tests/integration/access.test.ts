@@ -8,6 +8,7 @@ import { createDatabase, getDatabase, type DatabaseHandle } from "@/server/db/cl
 import { auditEvents, branches, schoolSettings, userBranches } from "@/server/db/schema";
 import {
   createBranch,
+  DuplicateBranchCodeError,
   getBranch,
   listBranches,
   updateBranch,
@@ -235,10 +236,9 @@ describe("branch isolation", () => {
     expect(await ownerQuery(`select 1 from branches where code = 'EAST'`)).toHaveLength(0);
   });
 
-  it("branch codes are unique", async () => {
-    await expectDbError(
-      createBranch(db, admin, { name: "Main Again", code: "main" }),
-      /23505|unique/i,
+  it("branch codes are unique (case-insensitive, as codes are upper-cased)", async () => {
+    await expect(createBranch(db, admin, { name: "Main Again", code: "main" })).rejects.toThrow(
+      DuplicateBranchCodeError,
     );
   });
 

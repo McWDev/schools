@@ -7,9 +7,13 @@ test.beforeEach(resetData);
 
 test.describe("role-aware navigation", () => {
   const cases: [string, string, string[]][] = [
-    ["school admin", "admin@example.test", ["Dashboard", "Users", "School settings", "My profile"]],
-    ["branch admin", "main.admin@example.test", ["Dashboard", "Users", "My profile"]],
-    ["teacher", "main.teacher@example.test", ["Dashboard", "My profile"]],
+    [
+      "school admin",
+      "admin@example.test",
+      ["Dashboard", "Branches", "Users", "School settings", "My profile"],
+    ],
+    ["branch admin", "main.admin@example.test", ["Dashboard", "Branches", "Users", "My profile"]],
+    ["teacher", "main.teacher@example.test", ["Dashboard", "Branches", "My profile"]],
   ];
   for (const [role, email, expected] of cases) {
     test(`${role} sees the right navigation`, async ({ page }) => {

@@ -24,7 +24,7 @@ test.describe("branch management", () => {
     await page.getByRole("button", { name: "Open branch" }).click();
 
     await expect(page.getByRole("heading", { name: "East Campus" })).toBeVisible();
-    await expect(page.getByText("Hodan District · EAST")).toBeVisible();
+    await expect(page.locator("#main").getByText("Hodan District · EAST")).toBeVisible();
     await expect(page.getByText("Branch opened.")).toBeVisible();
 
     await page.getByLabel(/^Branch:/).click();

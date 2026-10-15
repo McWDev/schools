@@ -1,6 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
+import { SYNTHETIC } from "../../scripts/lib/synthetic-school";
+
 import { navLabels, resetData, signIn } from "./helpers";
 
 test.beforeEach(resetData);
@@ -10,10 +12,27 @@ test.describe("role-aware navigation", () => {
     [
       "school admin",
       "admin@example.test",
-      ["Dashboard", "Branches", "Users", "School settings", "My profile"],
+      [
+        "Dashboard",
+        "Branches",
+        "Academic years",
+        "Grade levels",
+        "Classes",
+        "Users",
+        "School settings",
+        "My profile",
+      ],
     ],
-    ["branch admin", "main.admin@example.test", ["Dashboard", "Branches", "Users", "My profile"]],
-    ["teacher", "main.teacher@example.test", ["Dashboard", "Branches", "My profile"]],
+    [
+      "branch admin",
+      "main.admin@example.test",
+      ["Dashboard", "Branches", "Academic years", "Grade levels", "Classes", "Users", "My profile"],
+    ],
+    [
+      "teacher",
+      "main.teacher@example.test",
+      ["Dashboard", "Branches", "Academic years", "Grade levels", "Classes", "My profile"],
+    ],
   ];
   for (const [role, email, expected] of cases) {
     test(`${role} sees the right navigation`, async ({ page }) => {
@@ -103,7 +122,13 @@ test.describe("responsive layout", () => {
     test(`${name}: core pages fit the viewport`, async ({ page }) => {
       await page.setViewportSize({ width, height });
       await signIn(page, "admin@example.test");
-      for (const path of ["/dashboard", "/dashboard/users", "/dashboard/profile"]) {
+      for (const path of [
+        "/dashboard",
+        "/dashboard/users",
+        "/dashboard/profile",
+        "/dashboard/academics/grades",
+        "/dashboard/academics/classes",
+      ]) {
         await page.goto(path);
         await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
         await expectNoHorizontalOverflow(page);
@@ -135,6 +160,12 @@ test.describe("accessibility", () => {
       "/dashboard/users",
       "/dashboard/users/invite",
       "/dashboard/profile",
+      "/dashboard/branches",
+      "/dashboard/academics/years",
+      `/dashboard/academics/years/${SYNTHETIC.academicYear}`,
+      "/dashboard/academics/grades",
+      "/dashboard/academics/classes",
+      `/dashboard/academics/classes/${SYNTHETIC.classes.mainGrade1}`,
     ]) {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

@@ -71,6 +71,20 @@
       "when": 1792034034693,
       "tag": "0009_school_logo",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792036312112,
+      "tag": "0010_academic_structure",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792036316676,
+      "tag": "0011_academic_policies",
+      "breakpoints": true
     }
   ]
 }

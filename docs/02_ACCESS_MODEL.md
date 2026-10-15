@@ -52,3 +52,14 @@ Nobody can grant a permission they do not hold, change their own access, or mana
 - Deactivating a branch stops new operational activity but preserves historical records.
 - Students, marks, payments, and attendance are never deleted when a branch closes.
 - Moving staff between branches takes effect on their next request, because access is re-resolved every time.
+
+## 6. Academic structure scope
+| Record | Scope | Who changes it | Uniqueness |
+|---|---|---|---|
+| Academic year | School-wide | School-wide users with `academics.configure` | Name unique; exactly one current year |
+| Term | School-wide, inside one year | Same | Name and position unique within the year; dates inside the year |
+| Grade level | School-wide | Same | Name and code unique |
+| Class | One branch, one year, one grade | `classes.manage` within the user's branches | One class per branch, year, and grade |
+| Section | The branch of its class | Same | Name unique within the class |
+
+Every signed-in user with `academics.read` can read years, terms, and grade levels. Classes and sections are visible only inside the user's branches, enforced by row-level security as well as the service layer. Nothing is deleted: records are archived (and can be restored), and the application role has no `DELETE` privilege on these tables.

@@ -7,6 +7,8 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  date,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -30,6 +32,8 @@ export const userStatus = pgEnum("user_status", ["invited", "active", "suspended
 /** "school": every branch. "branch": only the branches listed in user_branches. */
 export const accessScope = pgEnum("access_scope", ["school", "branch"]);
 export const auditOutcome = pgEnum("audit_outcome", ["success", "denied", "failure"]);
+/** Academic records are archived, never deleted, so history (marks, attendance) stays valid. */
+export const recordStatus = pgEnum("record_status", ["active", "archived"]);
 
 /** The school's profile. Exactly one row (id = 1), created by migrations and edited in Settings. */
 export const schoolSettings = pgTable(
@@ -256,3 +260,109 @@ export const authRateLimits = pgTable("auth_rate_limits", {
   count: integer("count").notNull(),
   resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
 });
+
+/** School years, e.g. "2026-2027". Exactly one may be current. School-wide. */
+export const academicYears = pgTable(
+  "academic_years",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    startsOn: date("starts_on").notNull(),
+    endsOn: date("ends_on").notNull(),
+    isCurrent: boolean("is_current").notNull().default(false),
+    status: recordStatus("status").notNull().default("active"),
+    ...timestamps,
+  },
+  (t) => [
+    unique("academic_years_name_key").on(t.name),
+    check("academic_years_dates", sql`${t.startsOn} < ${t.endsOn}`),
+  ],
+);
+
+/** Terms or semesters within a year, in order. */
+export const terms = pgTable(
+  "terms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    academicYearId: uuid("academic_year_id")
+      .notNull()
+      .references(() => academicYears.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    sequence: integer("sequence").notNull(),
+    startsOn: date("starts_on").notNull(),
+    endsOn: date("ends_on").notNull(),
+    status: recordStatus("status").notNull().default("active"),
+    ...timestamps,
+  },
+  (t) => [
+    unique("terms_academic_year_id_name_key").on(t.academicYearId, t.name),
+    unique("terms_academic_year_id_sequence_key").on(t.academicYearId, t.sequence),
+    check("terms_dates", sql`${t.startsOn} < ${t.endsOn}`),
+    check("terms_sequence_positive", sql`${t.sequence} > 0`),
+  ],
+);
+
+/** Grade levels offered by the school, e.g. Grade 1 or Form 4. School-wide. */
+export const gradeLevels = pgTable(
+  "grade_levels",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    code: text("code").notNull(),
+    sortOrder: integer("sort_order").notNull(),
+    status: recordStatus("status").notNull().default("active"),
+    ...timestamps,
+  },
+  (t) => [unique("grade_levels_code_key").on(t.code), unique("grade_levels_name_key").on(t.name)],
+);
+
+/** A grade level taught at a branch in a given year. Branch-scoped. */
+export const classes = pgTable(
+  "classes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "restrict" }),
+    academicYearId: uuid("academic_year_id")
+      .notNull()
+      .references(() => academicYears.id, { onDelete: "restrict" }),
+    gradeLevelId: uuid("grade_level_id")
+      .notNull()
+      .references(() => gradeLevels.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    status: recordStatus("status").notNull().default("active"),
+    ...timestamps,
+  },
+  (t) => [
+    unique("classes_branch_year_grade_key").on(t.branchId, t.academicYearId, t.gradeLevelId),
+    // Target for the sections composite key: a section always shares the branch of its class.
+    unique("classes_id_branch_id_key").on(t.id, t.branchId),
+    index("classes_branch_id_academic_year_id_idx").on(t.branchId, t.academicYearId),
+  ],
+);
+
+/** Sections (streams) of a class, e.g. "A" and "B". Branch-scoped through their class. */
+export const sections = pgTable(
+  "sections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    classId: uuid("class_id").notNull(),
+    branchId: uuid("branch_id").notNull(),
+    name: text("name").notNull(),
+    capacity: integer("capacity"),
+    room: text("room"),
+    status: recordStatus("status").notNull().default("active"),
+    ...timestamps,
+  },
+  (t) => [
+    foreignKey({
+      name: "sections_class_fk",
+      columns: [t.classId, t.branchId],
+      foreignColumns: [classes.id, classes.branchId],
+    }).onDelete("restrict"),
+    unique("sections_class_id_name_key").on(t.classId, t.name),
+    check("sections_capacity_positive", sql`${t.capacity} is null or ${t.capacity} > 0`),
+    index("sections_branch_id_idx").on(t.branchId),
+  ],
+);

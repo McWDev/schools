@@ -17,6 +17,9 @@
 | `users.deactivate` | ✓ | ✓ | | | | |
 | `users.assign_roles` | ✓ | ✓ | | | | |
 | `audit.read` | ✓ | | | | | ✓ |
+| `academics.read` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `academics.configure` | ✓ | | | | | |
+| `classes.manage` | ✓ | ✓ | | ✓ | | |
 
 Later tasks add their own permissions (students, attendance, fees, and so on) to the catalog and role templates.
 

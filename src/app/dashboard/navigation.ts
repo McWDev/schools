@@ -1,6 +1,7 @@
 import type { PermissionCode } from "@/server/access/permissions";
 
-export type IconName = "home" | "users" | "user" | "settings" | "map-pin";
+export type IconName =
+  "home" | "users" | "user" | "settings" | "map-pin" | "calendar" | "layers" | "book";
 
 export interface NavItem {
   href: string;
@@ -28,6 +29,29 @@ const GROUPS: { label: string; items: NavDefinition[] }[] = [
         label: "Branches",
         icon: "map-pin",
         permission: "branches.read",
+      },
+    ],
+  },
+  {
+    label: "Academics",
+    items: [
+      {
+        href: "/dashboard/academics/years",
+        label: "Academic years",
+        icon: "calendar",
+        permission: "academics.read",
+      },
+      {
+        href: "/dashboard/academics/grades",
+        label: "Grade levels",
+        icon: "layers",
+        permission: "academics.read",
+      },
+      {
+        href: "/dashboard/academics/classes",
+        label: "Classes",
+        icon: "book",
+        permission: "academics.read",
       },
     ],
   },

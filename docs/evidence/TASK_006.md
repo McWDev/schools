@@ -27,4 +27,7 @@ Date: 2026-10-14 · Branch: `task/006-branch-management`
 - [x] **Deactivation does not delete historical data.** Staff assignments and audit events survive, the branch is still listed as inactive, and reopening restores it.
 
 ## Test run
-_Filled in after the final runs._
+- Integration: branches (10) and access (33) pass on the Neon `test` branch.
+- End-to-end, local: 38 of 39 passed on the first run. The one failure was a test bug, not an app bug: the new branch's "area · code" subtitle also appears in the header branch selector, so the locator matched two elements. The assertion is now scoped to the main region, and all 5 branch tests pass.
+- Found during this task: the e2e server wiped `.storage`, which is also the dev server's upload folder, so running e2e deleted the dev school logo and profile photos. E2E now uses its own `.storage-e2e` folder (new `STORAGE_DIR` setting).
+- CI: run 38678328337 failed on that e2e assertion. After the fix, CI for `ada26ba` is green, and `main` was fast-forwarded to it.

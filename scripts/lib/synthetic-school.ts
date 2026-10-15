@@ -16,6 +16,13 @@ export const SYNTHETIC = {
     /** Teacher at North Campus. */
     northTeacher: id(104),
   },
+  /** The current academic year (2026-2027) with three terms. */
+  academicYear: id(201),
+  terms: { first: id(211), second: id(212), third: id(213) },
+  grades: { grade1: id(301), grade2: id(302) },
+  /** Grade 1 at Main Campus with section A; North Campus has no classes yet. */
+  classes: { mainGrade1: id(401) },
+  sections: { mainGrade1A: id(501) },
 } as const;
 
 export type SyntheticSchool = typeof SYNTHETIC;
@@ -53,12 +60,29 @@ FROM (VALUES
   ('${s.users.northTeacher}', 'teacher')
 ) AS a(user_id, role_key)
 JOIN roles r ON r.key = a.role_key;
+INSERT INTO academic_years (id, name, starts_on, ends_on, is_current) VALUES
+  ('${s.academicYear}', '2026-2027', '2026-09-01', '2027-06-30', true);
+INSERT INTO terms (id, academic_year_id, name, sequence, starts_on, ends_on) VALUES
+  ('${s.terms.first}', '${s.academicYear}', 'Term 1', 1, '2026-09-01', '2026-12-18'),
+  ('${s.terms.second}', '${s.academicYear}', 'Term 2', 2, '2027-01-05', '2027-03-26'),
+  ('${s.terms.third}', '${s.academicYear}', 'Term 3', 3, '2027-04-06', '2027-06-30');
+INSERT INTO grade_levels (id, name, code, sort_order) VALUES
+  ('${s.grades.grade1}', 'Grade 1', 'G1', 1),
+  ('${s.grades.grade2}', 'Grade 2', 'G2', 2);
+INSERT INTO classes (id, branch_id, academic_year_id, grade_level_id, name) VALUES
+  ('${s.classes.mainGrade1}', '${s.branches.main}', '${s.academicYear}', '${s.grades.grade1}', 'Grade 1');
+INSERT INTO sections (id, class_id, branch_id, name, capacity, room) VALUES
+  ('${s.sections.mainGrade1A}', '${s.classes.mainGrade1}', '${s.branches.main}', 'A', 40, 'Room 101');
 `;
 
-/** Clears all people, branches, sessions, and history; keeps roles, permissions, and the profile row. */
+/**
+ * Clears all people, branches, academic structure, sessions, and history; keeps roles,
+ * permissions, and the profile row.
+ */
 export const RESET_SCHOOL_DATA_SQL = `
 TRUNCATE auth_rate_limits, password_reset_tokens, sessions, audit_events, user_invitations,
-  user_roles, user_branches, users, branches CASCADE;
+  user_roles, user_branches, sections, classes, terms, academic_years, grade_levels, users,
+  branches CASCADE;
 `;
 
 export async function insertSyntheticSchool(client: Client): Promise<SyntheticSchool> {

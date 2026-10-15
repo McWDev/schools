@@ -9,9 +9,9 @@
 | 004  | Professional dashboard                    | Accepted              | [TASK_004](evidence/TASK_004.md)       |
 | R1   | Single-school redesign (SaaS removed)     | Accepted              | [REDESIGN_R1](evidence/REDESIGN_R1.md) |
 | 005  | School profile and settings               | Accepted              | [TASK_005](evidence/TASK_005.md)       |
-| 006  | Branch management                         | Done                  | [TASK_006](evidence/TASK_006.md)       |
-| 007  | Academic structure                        | Next                  |                                        |
-| 008  | Student admissions and records            | Not started           |                                        |
+| 006  | Branch management                         | Accepted              | [TASK_006](evidence/TASK_006.md)       |
+| 007  | Academic structure                        | Done                  | [TASK_007](evidence/TASK_007.md)       |
+| 008  | Student admissions and records            | Next                  |                                        |
 | 009  | Staff and teachers                        | Not started           |                                        |
 | 010  | Subjects, assignments, timetables         | Not started           |                                        |
 | 011  | Attendance                                | Not started           |                                        |

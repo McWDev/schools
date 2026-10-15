@@ -12,6 +12,9 @@ export const PERMISSIONS = [
   "users.deactivate",
   "users.assign_roles",
   "audit.read",
+  "academics.read",
+  "academics.configure",
+  "classes.manage",
 ] as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[number];

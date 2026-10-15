@@ -147,8 +147,9 @@ describe("sessions", () => {
     const session = await validateSession(db, token);
     await setSessionBranch(db, session!.sessionId, t.branches.north);
     expect(await validateSession(db, token)).toMatchObject({ activeBranchId: t.branches.north });
-    // Assigned staff block deleting a branch (history is preserved), so clear them first.
+    // Staff and students block deleting a branch (history is preserved), so clear them first.
     await ownerQuery(`delete from user_branches where branch_id = $1`, [t.branches.north]);
+    await ownerQuery(`delete from students where branch_id = $1`, [t.branches.north]);
     await ownerQuery(`delete from branches where id = $1`, [t.branches.north]);
     expect(await validateSession(db, token)).toMatchObject({ activeBranchId: null });
   });

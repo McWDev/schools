@@ -101,6 +101,9 @@ export function SelectField({
         {label}
       </label>
       <select
+        // React resets forms after an action; remounting on a new defaultValue keeps the
+        // submitted choice selected instead of falling back to the first option.
+        key={defaultValue}
         id={id}
         name={name}
         defaultValue={defaultValue}

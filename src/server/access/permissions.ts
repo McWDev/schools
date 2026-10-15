@@ -15,6 +15,11 @@ export const PERMISSIONS = [
   "academics.read",
   "academics.configure",
   "classes.manage",
+  "students.read",
+  "students.read_sensitive",
+  "students.create",
+  "students.update",
+  "students.transfer",
 ] as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[number];

@@ -1,7 +1,15 @@
 import type { PermissionCode } from "@/server/access/permissions";
 
 export type IconName =
-  "home" | "users" | "user" | "settings" | "map-pin" | "calendar" | "layers" | "book";
+  | "home"
+  | "users"
+  | "user"
+  | "settings"
+  | "map-pin"
+  | "calendar"
+  | "layers"
+  | "book"
+  | "graduation";
 
 export interface NavItem {
   href: string;
@@ -57,7 +65,15 @@ const GROUPS: { label: string; items: NavDefinition[] }[] = [
   },
   {
     label: "People",
-    items: [{ href: "/dashboard/users", label: "Users", icon: "users", permission: "users.read" }],
+    items: [
+      {
+        href: "/dashboard/students",
+        label: "Students",
+        icon: "graduation",
+        permission: "students.read",
+      },
+      { href: "/dashboard/users", label: "Users", icon: "users", permission: "users.read" },
+    ],
   },
   {
     label: "Administration",

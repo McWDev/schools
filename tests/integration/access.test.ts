@@ -108,6 +108,9 @@ describe("missing access context fails closed", () => {
       "grade_levels",
       "classes",
       "sections",
+      "students",
+      "student_guardians",
+      "student_transfers",
     ]) {
       expect(await countWithoutContext(table), table).toBe(0);
     }
@@ -158,7 +161,7 @@ describe("access resolution", () => {
     expect(admin.scope).toEqual({ kind: "school" });
     expect(admin.permissions).toContain("branches.manage");
     expect(mainTeacher.scope).toEqual({ kind: "branch", branchIds: [t.branches.main] });
-    expect(mainTeacher.permissions).toEqual(["academics.read", "branches.read"]);
+    expect(mainTeacher.permissions).toEqual(["academics.read", "branches.read", "students.read"]);
   });
 
   it("removing a branch assignment removes access on the next resolution", async () => {

@@ -23,6 +23,9 @@ export const SYNTHETIC = {
   /** Grade 1 at Main Campus with section A; North Campus has no classes yet. */
   classes: { mainGrade1: id(401) },
   sections: { mainGrade1A: id(501) },
+  /** One student per branch; the student numbers come from the database sequence. */
+  students: { mainStudent: id(601), northStudent: id(602) },
+  guardians: { mainStudentMother: id(701) },
 } as const;
 
 export type SyntheticSchool = typeof SYNTHETIC;
@@ -73,6 +76,16 @@ INSERT INTO classes (id, branch_id, academic_year_id, grade_level_id, name) VALU
   ('${s.classes.mainGrade1}', '${s.branches.main}', '${s.academicYear}', '${s.grades.grade1}', 'Grade 1');
 INSERT INTO sections (id, class_id, branch_id, name, capacity, room) VALUES
   ('${s.sections.mainGrade1A}', '${s.classes.mainGrade1}', '${s.branches.main}', 'A', 40, 'Room 101');
+INSERT INTO students (id, branch_id, section_id, first_name, last_name, date_of_birth, gender,
+  admission_date, address, medical_notes) VALUES
+  ('${s.students.mainStudent}', '${s.branches.main}', '${s.sections.mainGrade1A}', 'Amina', 'Example',
+    '2019-03-14', 'female', '2026-09-01', '12 Example Street', 'Example allergy note'),
+  ('${s.students.northStudent}', '${s.branches.north}', NULL, 'Yusuf', 'Sample',
+    '2018-11-02', 'male', '2026-09-01', NULL, NULL);
+INSERT INTO student_guardians (id, student_id, branch_id, full_name, relationship, phone, email,
+  is_primary) VALUES
+  ('${s.guardians.mainStudentMother}', '${s.students.mainStudent}', '${s.branches.main}',
+    'Hodan Example', 'Mother', '+252 61 000 0001', 'hodan.parent@example.test', true);
 `;
 
 /**
@@ -81,8 +94,9 @@ INSERT INTO sections (id, class_id, branch_id, name, capacity, room) VALUES
  */
 export const RESET_SCHOOL_DATA_SQL = `
 TRUNCATE auth_rate_limits, password_reset_tokens, sessions, audit_events, user_invitations,
-  user_roles, user_branches, sections, classes, terms, academic_years, grade_levels, users,
-  branches CASCADE;
+  user_roles, user_branches, student_transfers, student_guardians, students, sections, classes,
+  terms, academic_years, grade_levels, users, branches CASCADE;
+SELECT setval('student_number_seq', 1, false);
 `;
 
 export async function insertSyntheticSchool(client: Client): Promise<SyntheticSchool> {

@@ -20,6 +20,11 @@
 | `academics.read` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `academics.configure` | ✓ | | | | | |
 | `classes.manage` | ✓ | ✓ | | ✓ | | |
+| `students.read` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `students.read_sensitive` | ✓ | ✓ | | ✓ | | |
+| `students.create` | ✓ | ✓ | | ✓ | | |
+| `students.update` | ✓ | ✓ | | ✓ | | |
+| `students.transfer` | ✓ | ✓ | | ✓ | | |
 
 Later tasks add their own permissions (students, attendance, fees, and so on) to the catalog and role templates.
 

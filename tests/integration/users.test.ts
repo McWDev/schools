@@ -101,7 +101,7 @@ describe("permissions", () => {
     expect(admin.permissions).toContain("school.settings.manage");
     expect(mainBranchAdmin.permissions).toContain("users.invite");
     expect(mainBranchAdmin.permissions).not.toContain("school.settings.manage");
-    expect(mainTeacher.permissions).toEqual(["academics.read", "branches.read"]);
+    expect(mainTeacher.permissions).toEqual(["academics.read", "branches.read", "students.read"]);
   });
 
   it("a teacher cannot list or manage staff", async () => {
@@ -285,7 +285,7 @@ describe("invitations", () => {
     expect(signedIn.ok).toBe(true);
     const context = await resolve(result.userId);
     expect(context.scope).toEqual({ kind: "branch", branchIds: [t.branches.main] });
-    expect(context.permissions).toEqual(["academics.read", "branches.read"]);
+    expect(context.permissions).toEqual(["academics.read", "branches.read", "students.read"]);
   });
 
   it("stores only a hash of the invitation token", async () => {

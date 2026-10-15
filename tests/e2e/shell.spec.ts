@@ -18,6 +18,7 @@ test.describe("role-aware navigation", () => {
         "Academic years",
         "Grade levels",
         "Classes",
+        "Students",
         "Users",
         "School settings",
         "My profile",
@@ -26,12 +27,29 @@ test.describe("role-aware navigation", () => {
     [
       "branch admin",
       "main.admin@example.test",
-      ["Dashboard", "Branches", "Academic years", "Grade levels", "Classes", "Users", "My profile"],
+      [
+        "Dashboard",
+        "Branches",
+        "Academic years",
+        "Grade levels",
+        "Classes",
+        "Students",
+        "Users",
+        "My profile",
+      ],
     ],
     [
       "teacher",
       "main.teacher@example.test",
-      ["Dashboard", "Branches", "Academic years", "Grade levels", "Classes", "My profile"],
+      [
+        "Dashboard",
+        "Branches",
+        "Academic years",
+        "Grade levels",
+        "Classes",
+        "Students",
+        "My profile",
+      ],
     ],
   ];
   for (const [role, email, expected] of cases) {
@@ -166,6 +184,9 @@ test.describe("accessibility", () => {
       "/dashboard/academics/grades",
       "/dashboard/academics/classes",
       `/dashboard/academics/classes/${SYNTHETIC.classes.mainGrade1}`,
+      "/dashboard/students",
+      "/dashboard/students/new",
+      `/dashboard/students/${SYNTHETIC.students.mainStudent}`,
     ]) {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

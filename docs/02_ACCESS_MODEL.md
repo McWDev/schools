@@ -63,3 +63,11 @@ Nobody can grant a permission they do not hold, change their own access, or mana
 | Section | The branch of its class | Same | Name unique within the class |
 
 Every signed-in user with `academics.read` can read years, terms, and grade levels. Classes and sections are visible only inside the user's branches, enforced by row-level security as well as the service layer. Nothing is deleted: records are archived (and can be restored), and the application role has no `DELETE` privilege on these tables.
+
+## 7. Student records
+- A student belongs to exactly one branch at a time (`students.branch_id`). Branch staff see only students of their branches; this is enforced by the service layer and by row-level security on `students`, `student_guardians`, and `student_transfers`.
+- **Student numbers** are issued by the database (`YYYY-NNNNN` from `student_number_seq`), are unique across the whole school (`students_student_number_key`), and can never be changed (trigger).
+- **Sensitive fields** (student phone, home address, medical notes, guardian phone and email) are loaded and accepted only for users with `students.read_sensitive`. Teachers, finance officers, and auditors see names, numbers, classes, photos, and statuses.
+- **Photos** are optional, decoded and re-encoded to a 512 × 512 WebP on upload (JPEG, PNG, or WebP up to 2 MB), and served by `/api/students/{id}/photo` only to staff who can see that student; everyone else gets 404.
+- **Duplicate warning**: admission checks for students anywhere in the school with the same name and date of birth. Staff learn only how many matches exist, never the other branch's record, and must confirm before admitting.
+- **Transfers** move the student, their guardians, and future work to the new branch, end the class placement, and add a row to the append-only transfer history. Both branches must be in the user's scope (also enforced by RLS). Nothing about a student is ever deleted; leaving the school is a status (`withdrawn`, `graduated`).

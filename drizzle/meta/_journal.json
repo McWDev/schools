@@ -85,6 +85,27 @@
       "when": 1792036316676,
       "tag": "0011_academic_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792042525366,
+      "tag": "0012_student_records",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792042529786,
+      "tag": "0013_student_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792058309805,
+      "tag": "0014_student_phone",
+      "breakpoints": true
     }
   ]
 }

@@ -63,7 +63,7 @@ let storage: ObjectStorage | undefined;
 export function getStorage(): ObjectStorage {
   if (storage) return storage;
   if (env().STORAGE_DRIVER === "local") {
-    storage = new LocalDiskStorage();
+    storage = new LocalDiskStorage(env().STORAGE_DIR);
     return storage;
   }
   // A private cloud bucket is configured before production (Task 021).

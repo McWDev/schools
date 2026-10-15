@@ -14,6 +14,8 @@ export const serverEnvSchema = z.object({
   EMAIL_TRANSPORT: z.enum(["outbox", "disabled"]).optional(),
   /** "local" stores uploads under .storage/. Defaults to "disabled" in production. */
   STORAGE_DRIVER: z.enum(["local", "disabled"]).optional(),
+  /** Folder for the "local" driver. End-to-end tests use their own so they never wipe dev uploads. */
+  STORAGE_DIR: z.string().min(1).default(".storage"),
 });
 
 type ParsedEnv = z.infer<typeof serverEnvSchema>;

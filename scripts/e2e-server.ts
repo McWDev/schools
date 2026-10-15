@@ -12,6 +12,8 @@ import { SYNTHETIC_PASSWORD, SYNTHETIC_SCHOOL_SQL } from "./lib/synthetic-school
 
 const E2E_PORT = 3218;
 
+const E2E_STORAGE_DIR = ".storage-e2e";
+
 async function main(): Promise<void> {
   // Load .env.test.local (TEST_DATABASE_URL), not the development .env.local.
   Object.assign(process.env, { NODE_ENV: "test" });
@@ -28,7 +30,8 @@ async function main(): Promise<void> {
   });
   const runtimeUrl = await rotateRuntimePassword(ownerUrl);
   await rm(".outbox", { recursive: true, force: true });
-  await rm(".storage", { recursive: true, force: true });
+  // A separate folder: wiping it must never delete the dev server's uploads (logo, photos).
+  await rm(E2E_STORAGE_DIR, { recursive: true, force: true });
 
   const server = spawn("npx", ["next", "start", "-p", String(E2E_PORT)], {
     stdio: "inherit",
@@ -40,6 +43,7 @@ async function main(): Promise<void> {
       APP_URL: `http://localhost:${E2E_PORT}`,
       EMAIL_TRANSPORT: "outbox",
       STORAGE_DRIVER: "local",
+      STORAGE_DIR: E2E_STORAGE_DIR,
     },
   });
   const stop = () => server.kill();

@@ -47,3 +47,4 @@ next-env.d.ts
 /test-results
 /playwright-report
 /.storage
+/.storage-e2e

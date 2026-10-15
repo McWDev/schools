@@ -43,6 +43,8 @@ export const schoolSettings = pgTable(
     email: text("email"),
     phone: text("phone"),
     address: text("address"),
+    /** Generated storage key of the re-encoded school logo (public: shown on sign-in pages). */
+    logoKey: text("logo_key"),
     ...timestamps,
   },
   (t) => [check("school_settings_singleton", sql`${t.id} = 1`)],

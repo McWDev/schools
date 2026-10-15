@@ -19,11 +19,18 @@ const SCHOOL_ADMIN = [
 
 describe("buildNavigation", () => {
   it("school admin sees users", () => {
-    expect(labels(buildNavigation(SCHOOL_ADMIN))).toEqual(["Dashboard", "Users", "My profile"]);
+    expect(labels(buildNavigation(SCHOOL_ADMIN))).toEqual([
+      "Dashboard",
+      "Users",
+      "School settings",
+      "My profile",
+    ]);
   });
 
-  it("branch admin with users.read sees users", () => {
-    expect(labels(buildNavigation(["branches.read", "users.read"]))).toContain("Users");
+  it("branch admin sees users but not school settings", () => {
+    const nav = labels(buildNavigation(["branches.read", "users.read", "users.invite"]));
+    expect(nav).toContain("Users");
+    expect(nav).not.toContain("School settings");
   });
 
   it("teacher sees only the dashboard and their profile", () => {

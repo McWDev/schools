@@ -30,7 +30,8 @@ export const SYNTHETIC_PASSWORD = "password1234";
  * already exist (created by migrations); roles are assigned by key.
  */
 export const SYNTHETIC_SCHOOL_SQL = `
-UPDATE school_settings SET name = 'Example Academy', short_name = 'EA', timezone = 'UTC' WHERE id = 1;
+UPDATE school_settings SET name = 'Example Academy', short_name = 'EA', timezone = 'UTC',
+  email = NULL, phone = NULL, address = NULL, logo_key = NULL WHERE id = 1;
 INSERT INTO branches (id, name, code, area) VALUES
   ('${s.branches.main}', 'Main Campus', 'MAIN', 'Central'),
   ('${s.branches.north}', 'North Campus', 'NORTH', 'North');

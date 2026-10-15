@@ -1,6 +1,6 @@
 import type { PermissionCode } from "@/server/access/permissions";
 
-export type IconName = "home" | "users" | "user";
+export type IconName = "home" | "users" | "user" | "settings";
 
 export interface NavItem {
   href: string;
@@ -23,6 +23,17 @@ const GROUPS: { label: string; items: NavDefinition[] }[] = [
   {
     label: "People",
     items: [{ href: "/dashboard/users", label: "Users", icon: "users", permission: "users.read" }],
+  },
+  {
+    label: "Administration",
+    items: [
+      {
+        href: "/dashboard/settings",
+        label: "School settings",
+        icon: "settings",
+        permission: "school.settings.manage",
+      },
+    ],
   },
   { label: "Account", items: [{ href: "/dashboard/profile", label: "My profile", icon: "user" }] },
 ];

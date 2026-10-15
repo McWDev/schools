@@ -1,0 +1,1 @@
+ALTER TABLE "school_settings" ADD COLUMN "logo_key" text;

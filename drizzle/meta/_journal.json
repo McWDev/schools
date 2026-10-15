@@ -64,6 +64,13 @@
       "when": 1792011571387,
       "tag": "0008_single_school",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792034034693,
+      "tag": "0009_school_logo",
+      "breakpoints": true
     }
   ]
 }

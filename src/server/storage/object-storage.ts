@@ -69,3 +69,23 @@ export function getStorage(): ObjectStorage {
   // A private cloud bucket is configured before production (Task 021).
   throw new Error("No object storage is configured (STORAGE_DRIVER=disabled).");
 }
+
+/** Test driver: keeps objects in memory. */
+export class MemoryStorage implements ObjectStorage {
+  private readonly objects = new Map<string, Buffer>();
+
+  async put(key: string, body: Buffer, _contentType: string): Promise<void> {
+    assertSafeKey(key);
+    this.objects.set(key, body);
+  }
+
+  async get(key: string): Promise<Buffer | null> {
+    assertSafeKey(key);
+    return this.objects.get(key) ?? null;
+  }
+
+  async delete(key: string): Promise<void> {
+    assertSafeKey(key);
+    this.objects.delete(key);
+  }
+}

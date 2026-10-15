@@ -52,7 +52,7 @@ function Sidebar({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () =
   );
 }
 
-function Brand({ schoolName }: { schoolName: string }) {
+function Brand({ schoolName, logoUrl }: { schoolName: string; logoUrl: string | null }) {
   const initials = schoolName
     .split(/\s+/)
     .slice(0, 2)
@@ -60,12 +60,22 @@ function Brand({ schoolName }: { schoolName: string }) {
     .join("");
   return (
     <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
-      <span
-        aria-hidden="true"
-        className="from-hero-from to-hero-to grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-sm font-bold text-white shadow-md"
-      >
-        {initials || <Icon name="building" />}
-      </span>
+      {logoUrl ? (
+        // Served by our own route; next/image optimization is not needed for one small file.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoUrl}
+          alt=""
+          className="size-9 shrink-0 rounded-xl bg-white object-contain p-1 shadow-md"
+        />
+      ) : (
+        <span
+          aria-hidden="true"
+          className="from-hero-from to-hero-to grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-sm font-bold text-white shadow-md"
+        >
+          {initials || <Icon name="building" />}
+        </span>
+      )}
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold text-white">{schoolName}</span>
         <span className="text-sidebar-muted block text-[11px] tracking-wide">
@@ -83,11 +93,13 @@ function Brand({ schoolName }: { schoolName: string }) {
 export function AppShell({
   groups,
   schoolName,
+  logoUrl,
   topBar,
   children,
 }: {
   groups: NavGroup[];
   schoolName: string;
+  logoUrl: string | null;
   topBar: ReactNode;
   children: ReactNode;
 }) {
@@ -139,7 +151,7 @@ export function AppShell({
 
       <aside className="bg-sidebar sticky top-0 hidden h-dvh w-64 shrink-0 flex-col md:flex">
         <div className="flex h-16 items-center border-b border-white/10 px-5">
-          <Brand schoolName={schoolName} />
+          <Brand schoolName={schoolName} logoUrl={logoUrl} />
         </div>
         <div className="flex-1 overflow-y-auto">
           <Sidebar groups={groups} />
@@ -164,7 +176,7 @@ export function AppShell({
             className="bg-sidebar absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col shadow-2xl"
           >
             <div className="flex h-16 items-center justify-between gap-2 border-b border-white/10 px-4">
-              <Brand schoolName={schoolName} />
+              <Brand schoolName={schoolName} logoUrl={logoUrl} />
               <button
                 ref={closeButton}
                 type="button"

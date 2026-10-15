@@ -39,4 +39,17 @@ Authentication is unchanged: it is still the system's own implementation (argon2
 - **Development database:** it held only synthetic data (2 example schools, 6 `@example.test` accounts, checked before clearing). It was cleared, migrated, and re-seeded with Example Academy. Production was untouched and is still empty.
 
 ## Test run
-_Filled in after the final runs._
+```
+npm run test:unit          →  26 passed
+npm run test:integration   →  91 passed: access 33 · auth 27 · staff 24 · dashboard 7   (Neon test branch)
+npm run test:e2e           →  30 tests; all pass in CI (local run was interrupted by a network outage)
+npm run lint / typecheck / format   →  clean
+npm run build              →  success
+npm run check:bundle       →  Client bundle clean (33 files checked)
+```
+CI passed: https://github.com/McWDev/schools/actions/runs/38675122288. `main` was fast-forwarded to `717d38a`.
+
+## Design refresh (requested together with R1)
+- Light, Dark, and System themes with no flash before first paint. Dark mode has axe AA checks, and the contrast tokens were raised after axe flagged them.
+- Navy sidebar, gradient welcome banner, icon stat cards, and shared button and input styles.
+- Screenshots: `img/r1-login-light.png`, `img/r1-login-dark.png`, `img/r1-dashboard-light.png`, `img/r1-dashboard-dark.png`, `img/r1-users-light.png`, `img/r1-dashboard-mobile.png`.

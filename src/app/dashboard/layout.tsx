@@ -158,7 +158,7 @@ async function Shell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <AppShell groups={groups} schoolName={school.name} topBar={topBar}>
+    <AppShell groups={groups} schoolName={school.name} logoUrl={school.logoUrl} topBar={topBar}>
       {children}
     </AppShell>
   );

@@ -6,55 +6,73 @@ import { ThemeToggle } from "@/components/theme";
 import { getSchoolProfile } from "@/server/access/school";
 import { getDatabase } from "@/server/db/client";
 
-/** The school's name from its profile, read at request time (it can change in Settings). */
-async function SchoolName({ className }: { className?: string }) {
+/**
+ * The school's logo on a solid white tile, so logos of any colour stay clearly visible. Until a
+ * logo is uploaded in School settings, a building emblem stands in.
+ */
+async function SchoolLogo({ size }: { size: "lg" | "sm" }) {
   await connection();
   const school = await getSchoolProfile(getDatabase());
-  return <span className={className}>{school.name}</span>;
+  const tile =
+    size === "lg"
+      ? "size-40 rounded-[2rem] p-5 shadow-2xl ring-8 ring-white/15"
+      : "size-14 rounded-2xl p-2 shadow-md ring-1 ring-black/5";
+  return school.logoUrl ? (
+    // Our own route serves a re-encoded image; next/image optimization is not needed here.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={school.logoUrl}
+      alt={`${school.name} logo`}
+      className={`${tile} bg-white object-contain`}
+    />
+  ) : (
+    <span
+      role="img"
+      aria-label={`${school.name} logo`}
+      className={`${tile} grid place-items-center bg-white`}
+    >
+      <Icon
+        name="building"
+        className={size === "lg" ? "size-16 text-[#4338ca]" : "size-7 text-[#4338ca]"}
+      />
+    </span>
+  );
 }
 
-const highlights = [
-  { icon: "map-pin" as const, text: "Every branch, each in its own area, in one place" },
-  { icon: "users" as const, text: "Staff see exactly the branches they work in" },
-  { icon: "badge" as const, text: "Secure sign-in and a full audit trail" },
-];
+async function Welcome({ compact = false }: { compact?: boolean }) {
+  await connection();
+  const school = await getSchoolProfile(getDatabase());
+  return compact ? (
+    <p className="text-foreground text-lg font-semibold tracking-tight">{school.name}</p>
+  ) : (
+    <div className="flex flex-col items-center gap-4">
+      <h2 className="max-w-md text-4xl leading-tight font-semibold tracking-tight text-balance">
+        {school.name}
+      </h2>
+      <span aria-hidden="true" className="h-1 w-12 rounded-full bg-white/50" />
+      <p className="max-w-sm text-lg text-white/85">
+        Welcome! Sign in to continue to your school&rsquo;s management system.
+      </p>
+    </div>
+  );
+}
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-      <aside className="from-hero-from to-hero-to relative hidden overflow-hidden bg-gradient-to-br p-12 text-white lg:flex lg:flex-col lg:justify-between">
+    <div className="grid flex-1 lg:grid-cols-2">
+      <aside className="from-hero-from to-hero-to relative hidden overflow-hidden bg-gradient-to-br text-white lg:flex lg:flex-col lg:items-center lg:justify-center lg:px-12">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -top-24 -left-20 size-80 rounded-full bg-white/10 blur-3xl"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgb(255_255_255/0.16),transparent_55%)]"
         />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute right-0 bottom-0 size-96 translate-x-1/3 translate-y-1/3 rounded-full bg-white/10 blur-3xl"
-        />
-        <div className="relative flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-xl bg-white/15 backdrop-blur-sm">
-            <Icon name="building" className="size-5" />
-          </span>
-          <Suspense fallback={<span className="text-lg font-semibold">School Management</span>}>
-            <SchoolName className="text-lg font-semibold" />
+        <div className="relative flex flex-col items-center gap-8 text-center">
+          <Suspense fallback={<span className="block size-40 rounded-[2rem] bg-white/15" />}>
+            <SchoolLogo size="lg" />
+          </Suspense>
+          <Suspense fallback={<span className="block h-28" />}>
+            <Welcome />
           </Suspense>
         </div>
-        <div className="relative max-w-md">
-          <h2 className="text-3xl leading-tight font-semibold tracking-tight">
-            One school. Every branch. One system.
-          </h2>
-          <ul className="mt-8 flex flex-col gap-4">
-            {highlights.map((item) => (
-              <li key={item.text} className="flex items-center gap-3 text-white/90">
-                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/15">
-                  <Icon name={item.icon} />
-                </span>
-                {item.text}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <p className="relative text-sm text-white/70">School Management System</p>
       </aside>
 
       <main className="relative flex flex-col items-center justify-center px-4 py-12 sm:px-8">
@@ -62,12 +80,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <ThemeToggle compact />
         </div>
         <div className="w-full max-w-sm">
-          <div className="mb-8 flex items-center justify-center gap-3 lg:hidden">
-            <span className="from-hero-from to-hero-to grid size-10 place-items-center rounded-xl bg-gradient-to-br text-white">
-              <Icon name="building" className="size-5" />
-            </span>
-            <Suspense fallback={<span className="font-semibold">School Management</span>}>
-              <SchoolName className="font-semibold" />
+          <div className="mb-8 flex flex-col items-center gap-3 text-center lg:hidden">
+            <Suspense fallback={<span className="bg-surface-muted block size-14 rounded-2xl" />}>
+              <SchoolLogo size="sm" />
+            </Suspense>
+            <Suspense fallback={null}>
+              <Welcome compact />
             </Suspense>
           </div>
           <div className="border-border bg-surface shadow-card rounded-2xl border p-6 sm:p-8">

@@ -7,9 +7,9 @@
 | 002  | Authentication, login, sessions           | Accepted              | [TASK_002](evidence/TASK_002.md)       |
 | 003  | User management, roles, profile           | Accepted              | [TASK_003](evidence/TASK_003.md)       |
 | 004  | Professional dashboard                    | Accepted              | [TASK_004](evidence/TASK_004.md)       |
-| R1   | Single-school redesign (SaaS removed)     | Done, awaiting review | [REDESIGN_R1](evidence/REDESIGN_R1.md) |
-| 005  | School profile and settings               | Next                  |                                        |
-| 006  | Branch management                         | Not started           |                                        |
+| R1   | Single-school redesign (SaaS removed)     | Accepted              | [REDESIGN_R1](evidence/REDESIGN_R1.md) |
+| 005  | School profile and settings               | Done                  | [TASK_005](evidence/TASK_005.md)       |
+| 006  | Branch management                         | Next                  |                                        |
 | 007  | Academic structure                        | Not started           |                                        |
 | 008  | Student admissions and records            | Not started           |                                        |
 | 009  | Staff and teachers                        | Not started           |                                        |

@@ -1,7 +1,7 @@
 import sharp, { type Sharp } from "sharp";
 import { describe, expect, it } from "vitest";
 
-import { AvatarValidationError, processAvatar } from "./avatar-image";
+import { AvatarValidationError, processAvatar, processLogo } from "./avatar-image";
 
 const solid = (width: number, height: number) =>
   sharp({ create: { width, height, channels: 3, background: "#3366cc" } });
@@ -63,5 +63,28 @@ describe("processAvatar", () => {
       .png({ compressionLevel: 9 })
       .toBuffer();
     await expect(processAvatar(huge)).rejects.toThrow(/too large/);
+  });
+});
+
+describe("processLogo", () => {
+  it("keeps the aspect ratio and transparency, fitting within 512 px", async () => {
+    const wide = await sharp({
+      create: { width: 1200, height: 400, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    })
+      .png()
+      .toBuffer();
+    const meta = await sharp(await processLogo(wide)).metadata();
+    expect(meta).toMatchObject({ format: "webp", width: 512, height: 171, hasAlpha: true });
+  });
+
+  it("does not enlarge small logos and still rejects disguised files", async () => {
+    const small = await solid(100, 60).png().toBuffer();
+    expect(await sharp(await processLogo(small)).metadata()).toMatchObject({
+      width: 100,
+      height: 60,
+    });
+    await expect(processLogo(Buffer.from("<svg onload=alert(1)>"))).rejects.toThrow(
+      AvatarValidationError,
+    );
   });
 });
